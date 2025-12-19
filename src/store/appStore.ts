@@ -8,6 +8,8 @@ interface Contact {
   name: string;
   phone: string;
   amount?: number;
+  appType?: string;
+  dayType?: number;
   accountDetails?: AccountDetail[];
   avatar?: string;
   lastSeen?: Date;
@@ -159,6 +161,8 @@ export const useAppStore = create<AppState>((set, get) => ({
         name: c.name,
         phone: c.phone,
         amount: c.amount ? Number(c.amount) : undefined,
+        appType: c.app_type || 'tloan',
+        dayType: c.day_type ?? 0,
         isOnline: c.is_online || false,
         lastSeen: c.last_seen ? new Date(c.last_seen) : undefined,
         avatar: c.avatar_url || undefined,

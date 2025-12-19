@@ -1,39 +1,43 @@
-import { X, Phone, Mail, Edit2, Trash2, CreditCard, Banknote } from 'lucide-react';
+import { Phone, Edit2, Trash2, CreditCard, Banknote, Smartphone, Calendar } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { ContactAvatar } from '@/components/shared/ContactAvatar';
 import { Button } from '@/components/ui/button';
 import { formatCurrency, formatLastSeen } from '@/lib/utils/format';
 import { Separator } from '@/components/ui/separator';
+import { useToast } from '@/hooks/use-toast';
 
 export function ContactPanel() {
-  const { activeChat, showContactPanel, setShowContactPanel, deleteContact } = useAppStore();
+  const { activeChat, setShowContactPanel, deleteContact } = useAppStore();
+  const { user } = useAuth();
+  const { toast } = useToast();
 
-  if (!activeChat || !showContactPanel) return null;
+  if (!activeChat) return null;
 
   const { contact } = activeChat;
 
-  const handleDelete = () => {
-    if (window.confirm(`Are you sure you want to delete ${contact.name}?`)) {
+  const handleDelete = async () => {
+    if (!window.confirm(`Are you sure you want to delete ${contact.name}?`)) return;
+    
+    try {
+      const { error } = await supabase
+        .from('contacts')
+        .delete()
+        .eq('id', contact.id);
+
+      if (error) throw error;
+
       deleteContact(contact.id);
       setShowContactPanel(false);
+      toast({ title: 'Contact deleted', description: `${contact.name} has been removed.` });
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
     }
   };
 
   return (
-    <div className="w-80 bg-panel border-l border-panel-border flex flex-col animate-slide-in-right">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-panel-header border-b border-panel-border">
-        <h3 className="font-medium">Contact Info</h3>
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="h-8 w-8"
-          onClick={() => setShowContactPanel(false)}
-        >
-          <X className="h-5 w-5" />
-        </Button>
-      </div>
-
+    <div className="w-full md:w-80 h-full bg-panel flex flex-col md:border-l md:border-panel-border overflow-hidden">
       {/* Content */}
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         {/* Profile */}
@@ -85,6 +89,26 @@ export function ContactPanel() {
                   </div>
                 </div>
               )}
+
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center">
+                  <Smartphone className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">App Type</p>
+                  <p className="font-medium capitalize">{(contact as any).appType || 'Tloan'}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center">
+                  <Calendar className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Day Type</p>
+                  <p className="font-medium">{(contact as any).dayType ?? 0} Day</p>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -118,12 +142,8 @@ export function ContactPanel() {
                   {contact.accountDetails.map((account, index) => (
                     <div key={account.id || index} className="p-3 rounded-lg bg-muted/50">
                       <p className="font-medium text-sm">{account.bank}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {account.accountNumber}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {account.accountName}
-                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">{account.accountNumber}</p>
+                      <p className="text-xs text-muted-foreground">{account.accountName}</p>
                     </div>
                   ))}
                 </div>
@@ -134,7 +154,7 @@ export function ContactPanel() {
       </div>
 
       {/* Actions */}
-      <div className="p-4 border-t border-panel-border space-y-2">
+      <div className="p-4 border-t border-panel-border space-y-2 shrink-0">
         <Button variant="outline" className="w-full justify-start gap-2">
           <Edit2 className="h-4 w-4" />
           Edit Contact
