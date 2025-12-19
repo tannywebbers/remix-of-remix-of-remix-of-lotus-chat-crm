@@ -14,7 +14,157 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      account_details: {
+        Row: {
+          account_name: string
+          account_number: string
+          bank: string
+          contact_id: string
+          created_at: string
+          id: string
+        }
+        Insert: {
+          account_name: string
+          account_number: string
+          bank: string
+          contact_id: string
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          account_name?: string
+          account_number?: string
+          bank?: string
+          contact_id?: string
+          created_at?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "account_details_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contacts: {
+        Row: {
+          amount: number | null
+          avatar_url: string | null
+          created_at: string
+          id: string
+          is_online: boolean | null
+          last_seen: string | null
+          loan_id: string
+          name: string
+          phone: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number | null
+          avatar_url?: string | null
+          created_at?: string
+          id?: string
+          is_online?: boolean | null
+          last_seen?: string | null
+          loan_id: string
+          name: string
+          phone: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number | null
+          avatar_url?: string | null
+          created_at?: string
+          id?: string
+          is_online?: boolean | null
+          last_seen?: string | null
+          loan_id?: string
+          name?: string
+          phone?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      messages: {
+        Row: {
+          contact_id: string
+          content: string
+          created_at: string
+          id: string
+          is_outgoing: boolean
+          media_url: string | null
+          status: string
+          type: string
+          user_id: string
+        }
+        Insert: {
+          contact_id: string
+          content: string
+          created_at?: string
+          id?: string
+          is_outgoing?: boolean
+          media_url?: string | null
+          status?: string
+          type?: string
+          user_id: string
+        }
+        Update: {
+          contact_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          is_outgoing?: boolean
+          media_url?: string | null
+          status?: string
+          type?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          email: string | null
+          id: string
+          name: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
