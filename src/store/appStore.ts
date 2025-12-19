@@ -1,5 +1,45 @@
 import { create } from 'zustand';
-import { Contact, Chat, Message, ViewMode } from '@/types';
+import { supabase } from '@/integrations/supabase/client';
+import { ViewMode } from '@/types';
+
+interface Contact {
+  id: string;
+  loanId: string;
+  name: string;
+  phone: string;
+  amount?: number;
+  accountDetails?: AccountDetail[];
+  avatar?: string;
+  lastSeen?: Date;
+  isOnline?: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+interface AccountDetail {
+  id: string;
+  bank: string;
+  accountNumber: string;
+  accountName: string;
+}
+
+interface Message {
+  id: string;
+  contactId: string;
+  content: string;
+  type: 'text' | 'image' | 'document';
+  status: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
+  isOutgoing: boolean;
+  timestamp: Date;
+  mediaUrl?: string;
+}
+
+interface Chat {
+  id: string;
+  contact: Contact;
+  lastMessage?: Message;
+  unreadCount: number;
+}
 
 interface AppState {
   // View state
@@ -8,6 +48,7 @@ interface AppState {
   
   // Contacts
   contacts: Contact[];
+  setContacts: (contacts: Contact[]) => void;
   addContact: (contact: Contact) => void;
   addContacts: (contacts: Contact[]) => void;
   updateContact: (id: string, updates: Partial<Contact>) => void;
@@ -15,12 +56,19 @@ interface AppState {
   
   // Chats
   chats: Chat[];
+  setChats: (chats: Chat[]) => void;
   activeChat: Chat | null;
   setActiveChat: (chat: Chat | null) => void;
   
   // Messages
   messages: Record<string, Message[]>;
+  setMessages: (contactId: string, messages: Message[]) => void;
   addMessage: (contactId: string, message: Message) => void;
+  
+  // Data loading
+  loading: boolean;
+  setLoading: (loading: boolean) => void;
+  loadData: (userId: string) => Promise<void>;
   
   // Contact Panel
   showContactPanel: boolean;
@@ -35,113 +83,24 @@ interface AppState {
   setSearchQuery: (query: string) => void;
 }
 
-// Mock data for demo
-const mockContacts: Contact[] = [
-  {
-    id: '1',
-    loanId: 'LN-001',
-    name: 'Rahul Sharma',
-    phone: '+91 98765 43210',
-    amount: 50000,
-    isOnline: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    accountDetails: [
-      { id: '1', bank: 'HDFC Bank', accountNumber: '1234567890', accountName: 'Rahul Sharma' }
-    ]
-  },
-  {
-    id: '2',
-    loanId: 'LN-002',
-    name: 'Priya Patel',
-    phone: '+91 87654 32109',
-    amount: 75000,
-    isOnline: false,
-    lastSeen: new Date(Date.now() - 3600000),
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-  {
-    id: '3',
-    loanId: 'LN-003',
-    name: 'Amit Kumar',
-    phone: '+91 76543 21098',
-    amount: 100000,
-    isOnline: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  },
-];
-
-const mockChats: Chat[] = mockContacts.map(contact => ({
-  id: contact.id,
-  contact,
-  unreadCount: Math.floor(Math.random() * 5),
-  lastMessage: {
-    id: '1',
-    contactId: contact.id,
-    content: 'Thank you for the update on my loan status.',
-    type: 'text' as const,
-    status: 'read' as const,
-    isOutgoing: false,
-    timestamp: new Date(Date.now() - Math.random() * 86400000),
-  },
-}));
-
-const mockMessages: Record<string, Message[]> = {
-  '1': [
-    {
-      id: '1',
-      contactId: '1',
-      content: 'Hello! I wanted to check on my loan application status.',
-      type: 'text',
-      status: 'read',
-      isOutgoing: false,
-      timestamp: new Date(Date.now() - 7200000),
-    },
-    {
-      id: '2',
-      contactId: '1',
-      content: 'Hi Rahul! Your loan application LN-001 has been approved. The amount of ₹50,000 will be disbursed within 24 hours.',
-      type: 'text',
-      status: 'read',
-      isOutgoing: true,
-      timestamp: new Date(Date.now() - 7100000),
-    },
-    {
-      id: '3',
-      contactId: '1',
-      content: 'That\'s great news! Thank you so much for the quick processing.',
-      type: 'text',
-      status: 'read',
-      isOutgoing: false,
-      timestamp: new Date(Date.now() - 7000000),
-    },
-    {
-      id: '4',
-      contactId: '1',
-      content: 'You\'re welcome! Please let me know if you have any questions.',
-      type: 'text',
-      status: 'delivered',
-      isOutgoing: true,
-      timestamp: new Date(Date.now() - 3600000),
-    },
-  ],
-};
-
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   viewMode: 'chats',
   setViewMode: (mode) => set({ viewMode: mode }),
   
-  contacts: mockContacts,
-  addContact: (contact) => set((state) => ({ 
-    contacts: [...state.contacts, contact],
-    chats: [...state.chats, { id: contact.id, contact, unreadCount: 0 }]
-  })),
-  addContacts: (contacts) => set((state) => ({ 
-    contacts: [...state.contacts, ...contacts],
-    chats: [...state.chats, ...contacts.map(c => ({ id: c.id, contact: c, unreadCount: 0 }))]
-  })),
+  contacts: [],
+  setContacts: (contacts) => set({ contacts }),
+  addContact: (contact) => {
+    set((state) => ({ 
+      contacts: [...state.contacts, contact],
+      chats: [...state.chats, { id: contact.id, contact, unreadCount: 0 }]
+    }));
+  },
+  addContacts: (contacts) => {
+    set((state) => ({ 
+      contacts: [...state.contacts, ...contacts],
+      chats: [...state.chats, ...contacts.map(c => ({ id: c.id, contact: c, unreadCount: 0 }))]
+    }));
+  },
   updateContact: (id, updates) => set((state) => ({
     contacts: state.contacts.map(c => c.id === id ? { ...c, ...updates, updatedAt: new Date() } : c),
     chats: state.chats.map(chat => 
@@ -156,11 +115,15 @@ export const useAppStore = create<AppState>((set) => ({
     activeChat: state.activeChat?.id === id ? null : state.activeChat,
   })),
   
-  chats: mockChats,
+  chats: [],
+  setChats: (chats) => set({ chats }),
   activeChat: null,
   setActiveChat: (chat) => set({ activeChat: chat, showContactPanel: false }),
   
-  messages: mockMessages,
+  messages: {},
+  setMessages: (contactId, messages) => set((state) => ({
+    messages: { ...state.messages, [contactId]: messages }
+  })),
   addMessage: (contactId, message) => set((state) => ({
     messages: {
       ...state.messages,
@@ -170,6 +133,95 @@ export const useAppStore = create<AppState>((set) => ({
       chat.id === contactId ? { ...chat, lastMessage: message } : chat
     ),
   })),
+  
+  loading: true,
+  setLoading: (loading) => set({ loading }),
+  
+  loadData: async (userId: string) => {
+    set({ loading: true });
+    
+    try {
+      // Fetch contacts
+      const { data: contactsData, error: contactsError } = await supabase
+        .from('contacts')
+        .select(`
+          *,
+          account_details (*)
+        `)
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (contactsError) throw contactsError;
+
+      const contacts: Contact[] = (contactsData || []).map(c => ({
+        id: c.id,
+        loanId: c.loan_id,
+        name: c.name,
+        phone: c.phone,
+        amount: c.amount ? Number(c.amount) : undefined,
+        isOnline: c.is_online || false,
+        lastSeen: c.last_seen ? new Date(c.last_seen) : undefined,
+        avatar: c.avatar_url || undefined,
+        createdAt: new Date(c.created_at),
+        updatedAt: new Date(c.updated_at),
+        accountDetails: (c.account_details || []).map((ad: any) => ({
+          id: ad.id,
+          bank: ad.bank,
+          accountNumber: ad.account_number,
+          accountName: ad.account_name,
+        })),
+      }));
+
+      // Fetch messages for all contacts
+      const { data: messagesData, error: messagesError } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: true });
+
+      if (messagesError) throw messagesError;
+
+      const messagesMap: Record<string, Message[]> = {};
+      const lastMessages: Record<string, Message> = {};
+
+      (messagesData || []).forEach(m => {
+        const message: Message = {
+          id: m.id,
+          contactId: m.contact_id,
+          content: m.content,
+          type: m.type as 'text' | 'image' | 'document',
+          status: m.status as Message['status'],
+          isOutgoing: m.is_outgoing,
+          timestamp: new Date(m.created_at),
+          mediaUrl: m.media_url || undefined,
+        };
+        
+        if (!messagesMap[m.contact_id]) {
+          messagesMap[m.contact_id] = [];
+        }
+        messagesMap[m.contact_id].push(message);
+        lastMessages[m.contact_id] = message;
+      });
+
+      // Create chats from contacts
+      const chats: Chat[] = contacts.map(contact => ({
+        id: contact.id,
+        contact,
+        lastMessage: lastMessages[contact.id],
+        unreadCount: 0,
+      }));
+
+      set({ 
+        contacts, 
+        chats, 
+        messages: messagesMap,
+        loading: false 
+      });
+    } catch (error) {
+      console.error('Error loading data:', error);
+      set({ loading: false });
+    }
+  },
   
   showContactPanel: false,
   setShowContactPanel: (show) => set({ showContactPanel: show }),
