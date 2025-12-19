@@ -1,16 +1,20 @@
 import { useState, useRef, useEffect } from 'react';
 import { Send, Paperclip, Smile, Mic, MoreVertical, Phone, Video, Info } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { ContactAvatar } from '@/components/shared/ContactAvatar';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { formatLastSeen, generateId } from '@/lib/utils/format';
+import { formatLastSeen } from '@/lib/utils/format';
 import { Message } from '@/types';
 
 export function ChatView() {
   const { activeChat, messages, addMessage, setShowContactPanel } = useAppStore();
+  const { user } = useAuth();
   const [inputValue, setInputValue] = useState('');
+  const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -20,27 +24,87 @@ export function ChatView() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
-  const handleSend = () => {
-    if (!inputValue.trim() || !activeChat) return;
+  // Subscribe to realtime messages
+  useEffect(() => {
+    if (!activeChat || !user) return;
 
-    const newMessage: Message = {
-      id: generateId(),
-      contactId: activeChat.id,
-      content: inputValue.trim(),
-      type: 'text',
-      status: 'sending',
-      isOutgoing: true,
-      timestamp: new Date(),
+    const channel = supabase
+      .channel(`messages-${activeChat.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `contact_id=eq.${activeChat.id}`,
+        },
+        (payload) => {
+          const m = payload.new as any;
+          const newMessage: Message = {
+            id: m.id,
+            contactId: m.contact_id,
+            content: m.content,
+            type: m.type,
+            status: m.status,
+            isOutgoing: m.is_outgoing,
+            timestamp: new Date(m.created_at),
+            mediaUrl: m.media_url,
+          };
+          // Only add if not already in state (to avoid duplicates from our own inserts)
+          const existing = messages[activeChat.id] || [];
+          if (!existing.find(msg => msg.id === newMessage.id)) {
+            addMessage(activeChat.id, newMessage);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
     };
+  }, [activeChat, user]);
 
-    addMessage(activeChat.id, newMessage);
+  const handleSend = async () => {
+    if (!inputValue.trim() || !activeChat || !user) return;
+
+    const content = inputValue.trim();
     setInputValue('');
-    inputRef.current?.focus();
+    setSending(true);
 
-    // Simulate message status updates
-    setTimeout(() => {
-      // Update to sent (would be handled by actual API)
-    }, 500);
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          user_id: user.id,
+          contact_id: activeChat.id,
+          content,
+          type: 'text',
+          status: 'sent',
+          is_outgoing: true,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newMessage: Message = {
+        id: data.id,
+        contactId: data.contact_id,
+        content: data.content,
+        type: 'text',
+        status: 'sent',
+        isOutgoing: true,
+        timestamp: new Date(data.created_at),
+      };
+
+      addMessage(activeChat.id, newMessage);
+      inputRef.current?.focus();
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setInputValue(content); // Restore on error
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -149,6 +213,7 @@ export function ChatView() {
             onKeyDown={handleKeyDown}
             placeholder="Type a message"
             className="flex-1 bg-background border-0 focus-visible:ring-0 h-10"
+            disabled={sending}
           />
           
           {inputValue.trim() ? (
@@ -156,6 +221,7 @@ export function ChatView() {
               size="icon" 
               className="h-10 w-10 shrink-0 rounded-full"
               onClick={handleSend}
+              disabled={sending}
             >
               <Send className="h-5 w-5" />
             </Button>

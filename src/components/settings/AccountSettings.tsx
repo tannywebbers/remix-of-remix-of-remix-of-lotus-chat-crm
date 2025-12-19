@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { User, Mail, Lock, Smartphone, LogOut } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,10 +11,12 @@ import { ContactAvatar } from '@/components/shared/ContactAvatar';
 import { useToast } from '@/hooks/use-toast';
 
 export function AccountSettings() {
+  const { user, signOut } = useAuth();
   const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState({
-    name: 'John Admin',
-    email: 'john@lotus-crm.com',
+    name: '',
+    email: '',
   });
   const [passwords, setPasswords] = useState({
     current: '',
@@ -20,14 +24,43 @@ export function AccountSettings() {
     confirm: '',
   });
 
-  const handleProfileSave = () => {
-    toast({
-      title: 'Profile updated',
-      description: 'Your profile has been saved successfully.',
-    });
+  useEffect(() => {
+    if (user) {
+      setProfile({
+        name: user.user_metadata?.name || user.email?.split('@')[0] || '',
+        email: user.email || '',
+      });
+    }
+  }, [user]);
+
+  const handleProfileSave = async () => {
+    if (!user) return;
+    
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ name: profile.name })
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      toast({
+        title: 'Profile updated',
+        description: 'Your profile has been saved successfully.',
+      });
+    } catch (error: any) {
+      toast({
+        title: 'Error updating profile',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handlePasswordChange = () => {
+  const handlePasswordChange = async () => {
     if (passwords.new !== passwords.confirm) {
       toast({
         title: 'Passwords do not match',
@@ -36,12 +69,34 @@ export function AccountSettings() {
       });
       return;
     }
-    
-    toast({
-      title: 'Password changed',
-      description: 'Your password has been updated successfully.',
-    });
-    setPasswords({ current: '', new: '', confirm: '' });
+
+    setLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        password: passwords.new
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: 'Password changed',
+        description: 'Your password has been updated successfully.',
+      });
+      setPasswords({ current: '', new: '', confirm: '' });
+    } catch (error: any) {
+      toast({
+        title: 'Error changing password',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    window.location.href = '/auth';
   };
 
   return (
@@ -58,7 +113,7 @@ export function AccountSettings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center gap-4">
-            <ContactAvatar name={profile.name} size="lg" />
+            <ContactAvatar name={profile.name || 'User'} size="lg" />
             <Button variant="outline" size="sm">Change Photo</Button>
           </div>
 
@@ -81,12 +136,15 @@ export function AccountSettings() {
                 id="email"
                 type="email"
                 value={profile.email}
-                onChange={(e) => setProfile({ ...profile, email: e.target.value })}
+                disabled
+                className="bg-muted"
               />
             </div>
           </div>
 
-          <Button onClick={handleProfileSave}>Save Changes</Button>
+          <Button onClick={handleProfileSave} disabled={loading}>
+            {loading ? 'Saving...' : 'Save Changes'}
+          </Button>
         </CardContent>
       </Card>
 
@@ -101,16 +159,6 @@ export function AccountSettings() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="currentPassword">Current Password</Label>
-            <Input
-              id="currentPassword"
-              type="password"
-              value={passwords.current}
-              onChange={(e) => setPasswords({ ...passwords, current: e.target.value })}
-            />
-          </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="newPassword">New Password</Label>
@@ -133,7 +181,9 @@ export function AccountSettings() {
             </div>
           </div>
 
-          <Button onClick={handlePasswordChange}>Update Password</Button>
+          <Button onClick={handlePasswordChange} disabled={loading || !passwords.new}>
+            {loading ? 'Updating...' : 'Update Password'}
+          </Button>
         </CardContent>
       </Card>
 
@@ -141,10 +191,10 @@ export function AccountSettings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Smartphone className="h-5 w-5 text-primary" />
-            Active Sessions
+            Session
           </CardTitle>
           <CardDescription>
-            Manage your active sessions across devices.
+            Manage your current session.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -154,18 +204,22 @@ export function AccountSettings() {
                 <Smartphone className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <p className="font-medium text-sm">This device</p>
-                <p className="text-xs text-muted-foreground">Chrome on Windows • Active now</p>
+                <p className="font-medium text-sm">Current Session</p>
+                <p className="text-xs text-muted-foreground">{user?.email}</p>
               </div>
             </div>
-            <span className="text-xs text-lotus-green font-medium">Current</span>
+            <span className="text-xs text-lotus-green font-medium">Active</span>
           </div>
 
           <Separator />
 
-          <Button variant="outline" className="w-full gap-2 text-destructive hover:text-destructive">
+          <Button 
+            variant="outline" 
+            className="w-full gap-2 text-destructive hover:text-destructive"
+            onClick={handleSignOut}
+          >
             <LogOut className="h-4 w-4" />
-            Log out from all devices
+            Sign Out
           </Button>
         </CardContent>
       </Card>

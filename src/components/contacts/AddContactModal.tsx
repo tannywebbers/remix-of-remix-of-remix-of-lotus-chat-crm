@@ -1,19 +1,22 @@
 import { useState } from 'react';
 import { X, User, Phone, CreditCard, Banknote, FileText, Users } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { generateId, parseAccountDetails, parseBulkContacts } from '@/lib/utils/format';
-import { Contact, AccountDetail } from '@/types';
+import { parseAccountDetails, parseBulkContacts } from '@/lib/utils/format';
 import { useToast } from '@/hooks/use-toast';
 
 export function AddContactModal() {
   const { showAddContactModal, setShowAddContactModal, addContact, addContacts } = useAppStore();
+  const { user } = useAuth();
   const { toast } = useToast();
+  const [loading, setLoading] = useState(false);
   
   const [singleForm, setSingleForm] = useState({
     loanId: '',
@@ -35,7 +38,7 @@ export function AddContactModal() {
     resetForms();
   };
 
-  const handleSingleSubmit = (e: React.FormEvent) => {
+  const handleSingleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!singleForm.loanId || !singleForm.name || !singleForm.phone) {
@@ -47,33 +50,76 @@ export function AddContactModal() {
       return;
     }
 
-    const accountDetails: AccountDetail[] = singleForm.accountDetails
-      ? parseAccountDetails(singleForm.accountDetails).map((acc, i) => ({
-          id: generateId(),
+    if (!user) return;
+
+    setLoading(true);
+    try {
+      // Insert contact
+      const { data: contactData, error: contactError } = await supabase
+        .from('contacts')
+        .insert({
+          user_id: user.id,
+          loan_id: singleForm.loanId,
+          name: singleForm.name,
+          phone: singleForm.phone,
+          amount: singleForm.amount ? parseFloat(singleForm.amount) : null,
+        })
+        .select()
+        .single();
+
+      if (contactError) throw contactError;
+
+      // Insert account details if provided
+      const parsedAccounts = singleForm.accountDetails
+        ? parseAccountDetails(singleForm.accountDetails)
+        : [];
+
+      if (parsedAccounts.length > 0) {
+        const { error: accountError } = await supabase
+          .from('account_details')
+          .insert(
+            parsedAccounts.map(acc => ({
+              contact_id: contactData.id,
+              bank: acc.bank,
+              account_number: acc.accountNumber,
+              account_name: acc.accountName,
+            }))
+          );
+
+        if (accountError) console.error('Error adding account details:', accountError);
+      }
+
+      addContact({
+        id: contactData.id,
+        loanId: contactData.loan_id,
+        name: contactData.name,
+        phone: contactData.phone,
+        amount: contactData.amount ? Number(contactData.amount) : undefined,
+        createdAt: new Date(contactData.created_at),
+        updatedAt: new Date(contactData.updated_at),
+        accountDetails: parsedAccounts.map((acc, i) => ({
+          id: `temp-${i}`,
           ...acc,
-        }))
-      : [];
+        })),
+      });
 
-    const newContact: Contact = {
-      id: generateId(),
-      loanId: singleForm.loanId,
-      name: singleForm.name,
-      phone: singleForm.phone,
-      amount: singleForm.amount ? parseFloat(singleForm.amount) : undefined,
-      accountDetails,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    addContact(newContact);
-    toast({
-      title: 'Contact added',
-      description: `${newContact.name} has been added successfully.`,
-    });
-    handleClose();
+      toast({
+        title: 'Contact added',
+        description: `${contactData.name} has been added successfully.`,
+      });
+      handleClose();
+    } catch (error: any) {
+      toast({
+        title: 'Error adding contact',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleBulkSubmit = (e: React.FormEvent) => {
+  const handleBulkSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!bulkInput.trim()) {
@@ -84,6 +130,8 @@ export function AddContactModal() {
       });
       return;
     }
+
+    if (!user) return;
 
     const parsedContacts = parseBulkContacts(bulkInput);
     
@@ -96,21 +144,46 @@ export function AddContactModal() {
       return;
     }
 
-    const newContacts: Contact[] = parsedContacts.map(c => ({
-      id: generateId(),
-      loanId: c.loanId,
-      name: c.name,
-      phone: c.phone,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }));
+    setLoading(true);
+    try {
+      const { data: contactsData, error } = await supabase
+        .from('contacts')
+        .insert(
+          parsedContacts.map(c => ({
+            user_id: user.id,
+            loan_id: c.loanId,
+            name: c.name,
+            phone: c.phone,
+          }))
+        )
+        .select();
 
-    addContacts(newContacts);
-    toast({
-      title: 'Contacts added',
-      description: `${newContacts.length} contacts have been added successfully.`,
-    });
-    handleClose();
+      if (error) throw error;
+
+      const newContacts = (contactsData || []).map(c => ({
+        id: c.id,
+        loanId: c.loan_id,
+        name: c.name,
+        phone: c.phone,
+        createdAt: new Date(c.created_at),
+        updatedAt: new Date(c.updated_at),
+      }));
+
+      addContacts(newContacts);
+      toast({
+        title: 'Contacts added',
+        description: `${newContacts.length} contacts have been added successfully.`,
+      });
+      handleClose();
+    } catch (error: any) {
+      toast({
+        title: 'Error adding contacts',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -210,10 +283,12 @@ export function AddContactModal() {
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={handleClose}>
+                <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
                   Cancel
                 </Button>
-                <Button type="submit">Add Contact</Button>
+                <Button type="submit" disabled={loading}>
+                  {loading ? 'Adding...' : 'Add Contact'}
+                </Button>
               </div>
             </form>
           </TabsContent>
@@ -236,10 +311,12 @@ export function AddContactModal() {
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
-                <Button type="button" variant="outline" onClick={handleClose}>
+                <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
                   Cancel
                 </Button>
-                <Button type="submit">Import Contacts</Button>
+                <Button type="submit" disabled={loading}>
+                  {loading ? 'Importing...' : 'Import Contacts'}
+                </Button>
               </div>
             </form>
           </TabsContent>
