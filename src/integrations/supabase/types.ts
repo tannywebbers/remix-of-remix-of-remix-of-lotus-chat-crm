@@ -52,8 +52,10 @@ export type Database = {
       contacts: {
         Row: {
           amount: number | null
+          app_type: string | null
           avatar_url: string | null
           created_at: string
+          day_type: number | null
           id: string
           is_online: boolean | null
           last_seen: string | null
@@ -65,8 +67,10 @@ export type Database = {
         }
         Insert: {
           amount?: number | null
+          app_type?: string | null
           avatar_url?: string | null
           created_at?: string
+          day_type?: number | null
           id?: string
           is_online?: boolean | null
           last_seen?: string | null
@@ -78,8 +82,10 @@ export type Database = {
         }
         Update: {
           amount?: number | null
+          app_type?: string | null
           avatar_url?: string | null
           created_at?: string
+          day_type?: number | null
           id?: string
           is_online?: boolean | null
           last_seen?: string | null

@@ -3,7 +3,6 @@ import { useAppStore } from '@/store/appStore';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { ChatListItem } from '@/components/chat/ChatListItem';
 import { ContactListItem } from '@/components/contacts/ContactListItem';
-import { SettingsView } from '@/components/settings/SettingsView';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ViewMode } from '@/types';
@@ -14,7 +13,11 @@ const navItems: { mode: ViewMode; icon: typeof MessageCircle; label: string }[] 
   { mode: 'settings', icon: Settings, label: 'Settings' },
 ];
 
-export function ChatList() {
+interface ChatListProps {
+  onChatSelect?: (chat: any) => void;
+}
+
+export function ChatList({ onChatSelect }: ChatListProps) {
   const { 
     viewMode, 
     setViewMode, 
@@ -38,10 +41,15 @@ export function ChatList() {
     contact.loanId.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleChatClick = (chat: any) => {
+    setActiveChat(chat);
+    onChatSelect?.(chat);
+  };
+
   return (
     <div className="flex flex-col h-full bg-panel border-r border-panel-border">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-panel-header border-b border-panel-border">
+      <div className="flex items-center justify-between px-4 py-3 bg-panel-header border-b border-panel-border shrink-0">
         <h1 className="text-xl font-semibold text-primary">Lotus</h1>
         <div className="flex items-center gap-2">
           {navItems.map(({ mode, icon: Icon }) => (
@@ -62,7 +70,7 @@ export function ChatList() {
       </div>
 
       {/* Search */}
-      <div className="p-3 border-b border-panel-border">
+      <div className="p-3 border-b border-panel-border shrink-0">
         <SearchInput
           value={searchQuery}
           onChange={setSearchQuery}
@@ -78,6 +86,7 @@ export function ChatList() {
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4">
                 <MessageCircle className="h-12 w-12 mb-3 opacity-50" />
                 <p className="text-sm">No chats yet</p>
+                <p className="text-xs mt-1">Add contacts to start chatting</p>
               </div>
             ) : (
               filteredChats
@@ -91,7 +100,7 @@ export function ChatList() {
                     key={chat.id}
                     chat={chat}
                     isActive={activeChat?.id === chat.id}
-                    onClick={() => setActiveChat(chat)}
+                    onClick={() => handleChatClick(chat)}
                   />
                 ))
             )}
@@ -123,7 +132,7 @@ export function ChatList() {
                   onClick={() => {
                     const chat = chats.find(c => c.contact.id === contact.id);
                     if (chat) {
-                      setActiveChat(chat);
+                      handleChatClick(chat);
                       setViewMode('chats');
                     }
                   }}
@@ -133,7 +142,11 @@ export function ChatList() {
           </>
         )}
 
-        {viewMode === 'settings' && <SettingsView />}
+        {viewMode === 'settings' && (
+          <div className="p-4 text-center text-muted-foreground">
+            <p className="text-sm">Click Settings icon on mobile to open full settings</p>
+          </div>
+        )}
       </div>
     </div>
   );

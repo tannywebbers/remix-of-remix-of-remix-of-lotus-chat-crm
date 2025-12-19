@@ -5,6 +5,7 @@ import { ChatList } from '@/components/chat/ChatList';
 import { ChatView } from '@/components/chat/ChatView';
 import { ContactPanel } from '@/components/contacts/ContactPanel';
 import { AddContactModal } from '@/components/contacts/AddContactModal';
+import { SettingsPage } from '@/components/settings/SettingsPage';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ViewMode } from '@/types';
@@ -19,66 +20,84 @@ export function MobileLayout() {
   const { viewMode, setViewMode, activeChat, setActiveChat, showContactPanel, setShowContactPanel } = useAppStore();
   const [showChatView, setShowChatView] = useState(false);
 
-  const handleChatSelect = () => {
+  // Handle opening a chat
+  const handleOpenChat = (chat: any) => {
+    setActiveChat(chat);
     setShowChatView(true);
   };
 
-  const handleBack = () => {
+  // Handle going back from chat view
+  const handleBackFromChat = () => {
     setShowChatView(false);
     setActiveChat(null);
   };
+
+  // Show settings as full page
+  if (viewMode === 'settings') {
+    return (
+      <div className="h-screen flex flex-col bg-background">
+        <div className="flex items-center gap-2 px-4 py-3 bg-panel-header border-b border-panel-border">
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={() => setViewMode('chats')}
+            className="h-9 w-9"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          <h1 className="text-lg font-semibold">Settings</h1>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          <SettingsPage />
+        </div>
+        <AddContactModal />
+      </div>
+    );
+  }
 
   // Show contact panel as full screen on mobile
   if (showContactPanel && activeChat) {
     return (
       <div className="h-screen flex flex-col bg-background">
-        <div className="flex items-center px-2 py-2 bg-panel-header border-b border-panel-border">
+        <div className="flex items-center gap-2 px-4 py-3 bg-panel-header border-b border-panel-border">
           <Button 
             variant="ghost" 
             size="icon"
             onClick={() => setShowContactPanel(false)}
+            className="h-9 w-9"
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
-          <span className="ml-2 font-medium">Contact Info</span>
+          <h1 className="text-lg font-semibold">Contact Info</h1>
         </div>
-        <ContactPanel />
+        <div className="flex-1 overflow-hidden">
+          <ContactPanel />
+        </div>
         <AddContactModal />
       </div>
     );
   }
 
-  // Show chat view when a chat is selected
+  // Show full screen chat view when a chat is selected
   if (showChatView && activeChat) {
     return (
       <div className="h-screen flex flex-col bg-background">
-        {/* Back button overlay on chat header */}
-        <div className="flex items-center px-2 py-2 bg-panel-header border-b border-panel-border">
-          <Button 
-            variant="ghost" 
-            size="icon"
-            onClick={handleBack}
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-        </div>
-        <div className="flex-1 flex flex-col -mt-14">
-          <ChatView />
-        </div>
+        <ChatView onBack={handleBackFromChat} showBackButton={true} />
         <AddContactModal />
       </div>
     );
   }
 
+  // Default: Show chat list with bottom navigation
   return (
     <div className="h-screen flex flex-col bg-background">
       {/* Main Content */}
       <div className="flex-1 overflow-hidden">
-        <ChatList />
+        <ChatList onChatSelect={handleOpenChat} />
       </div>
 
       {/* Bottom Navigation */}
-      <nav className="flex items-center justify-around bg-panel-header border-t border-panel-border py-2 safe-area-pb">
+      <nav className="flex items-center justify-around bg-panel-header border-t border-panel-border py-2 pb-safe">
         {navItems.map(({ mode, icon: Icon, label }) => (
           <button
             key={mode}
