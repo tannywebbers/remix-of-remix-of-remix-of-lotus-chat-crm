@@ -4,10 +4,15 @@ export interface Contact {
   name: string;
   phone: string;
   amount?: number;
+  appType?: string;
+  dayType?: number;
   accountDetails?: AccountDetail[];
   avatar?: string;
   lastSeen?: Date;
   isOnline?: boolean;
+  isPinned?: boolean;
+  isMuted?: boolean;
+  isArchived?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,11 +28,14 @@ export interface Message {
   id: string;
   contactId: string;
   content: string;
-  type: 'text' | 'image' | 'document';
+  type: 'text' | 'image' | 'document' | 'audio' | 'video';
   status: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
   isOutgoing: boolean;
   timestamp: Date;
   mediaUrl?: string;
+  whatsappMessageId?: string;
+  templateName?: string;
+  templateParams?: Record<string, string>;
 }
 
 export interface Chat {
@@ -37,6 +45,7 @@ export interface Chat {
   unreadCount: number;
   isPinned?: boolean;
   isMuted?: boolean;
+  isArchived?: boolean;
 }
 
 export interface User {
