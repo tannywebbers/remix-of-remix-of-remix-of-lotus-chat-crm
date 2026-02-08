@@ -35,8 +35,8 @@ export function MobileLayout() {
   // Show settings as full page
   if (viewMode === 'settings') {
     return (
-      <div className="h-screen flex flex-col bg-background">
-        <div className="flex items-center gap-2 px-4 py-3 bg-panel-header border-b border-panel-border">
+      <div className="h-[100dvh] flex flex-col bg-background">
+        <div className="flex items-center gap-2 px-4 py-3 bg-panel-header border-b border-panel-border shrink-0">
           <Button 
             variant="ghost" 
             size="icon"
@@ -47,7 +47,7 @@ export function MobileLayout() {
           </Button>
           <h1 className="text-lg font-semibold">Settings</h1>
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-hidden">
           <SettingsPage />
         </div>
         <AddContactModal />
@@ -58,8 +58,8 @@ export function MobileLayout() {
   // Show contact panel as full screen on mobile
   if (showContactPanel && activeChat) {
     return (
-      <div className="h-screen flex flex-col bg-background">
-        <div className="flex items-center gap-2 px-4 py-3 bg-panel-header border-b border-panel-border">
+      <div className="h-[100dvh] flex flex-col bg-background">
+        <div className="flex items-center gap-2 px-4 py-3 bg-panel-header border-b border-panel-border shrink-0">
           <Button 
             variant="ghost" 
             size="icon"
@@ -81,7 +81,7 @@ export function MobileLayout() {
   // Show full screen chat view when a chat is selected
   if (showChatView && activeChat) {
     return (
-      <div className="h-screen flex flex-col bg-background">
+      <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
         <ChatView onBack={handleBackFromChat} showBackButton={true} />
         <AddContactModal />
       </div>
@@ -90,14 +90,14 @@ export function MobileLayout() {
 
   // Default: Show chat list with bottom navigation
   return (
-    <div className="h-screen flex flex-col bg-background">
+    <div className="h-[100dvh] flex flex-col bg-background">
       {/* Main Content */}
       <div className="flex-1 overflow-hidden">
         <ChatList onChatSelect={handleOpenChat} />
       </div>
 
       {/* Bottom Navigation */}
-      <nav className="flex items-center justify-around bg-panel-header border-t border-panel-border py-2 pb-safe">
+      <nav className="flex items-center justify-around bg-panel-header border-t border-panel-border py-2 pb-safe shrink-0">
         {navItems.map(({ mode, icon: Icon, label }) => (
           <button
             key={mode}

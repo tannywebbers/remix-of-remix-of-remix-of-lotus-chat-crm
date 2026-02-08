@@ -1,47 +1,6 @@
 import { create } from 'zustand';
 import { supabase } from '@/integrations/supabase/client';
-import { ViewMode } from '@/types';
-
-interface Contact {
-  id: string;
-  loanId: string;
-  name: string;
-  phone: string;
-  amount?: number;
-  appType?: string;
-  dayType?: number;
-  accountDetails?: AccountDetail[];
-  avatar?: string;
-  lastSeen?: Date;
-  isOnline?: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface AccountDetail {
-  id: string;
-  bank: string;
-  accountNumber: string;
-  accountName: string;
-}
-
-interface Message {
-  id: string;
-  contactId: string;
-  content: string;
-  type: 'text' | 'image' | 'document';
-  status: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
-  isOutgoing: boolean;
-  timestamp: Date;
-  mediaUrl?: string;
-}
-
-interface Chat {
-  id: string;
-  contact: Contact;
-  lastMessage?: Message;
-  unreadCount: number;
-}
+import { ViewMode, Message, Chat, Contact } from '@/types';
 
 interface AppState {
   // View state
@@ -110,6 +69,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         ? { ...chat, contact: { ...chat.contact, ...updates, updatedAt: new Date() } }
         : chat
     ),
+    activeChat: state.activeChat?.id === id 
+      ? { ...state.activeChat, contact: { ...state.activeChat.contact, ...updates, updatedAt: new Date() } }
+      : state.activeChat,
   })),
   deleteContact: (id) => set((state) => ({
     contacts: state.contacts.filter(c => c.id !== id),
@@ -155,7 +117,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       if (contactsError) throw contactsError;
 
-      const contacts: Contact[] = (contactsData || []).map(c => ({
+      const contacts: Contact[] = (contactsData || []).map((c: any) => ({
         id: c.id,
         loanId: c.loan_id,
         name: c.name,
@@ -166,6 +128,9 @@ export const useAppStore = create<AppState>((set, get) => ({
         isOnline: c.is_online || false,
         lastSeen: c.last_seen ? new Date(c.last_seen) : undefined,
         avatar: c.avatar_url || undefined,
+        isPinned: c.is_pinned || false,
+        isMuted: c.is_muted || false,
+        isArchived: c.is_archived || false,
         createdAt: new Date(c.created_at),
         updatedAt: new Date(c.updated_at),
         accountDetails: (c.account_details || []).map((ad: any) => ({
@@ -188,16 +153,19 @@ export const useAppStore = create<AppState>((set, get) => ({
       const messagesMap: Record<string, Message[]> = {};
       const lastMessages: Record<string, Message> = {};
 
-      (messagesData || []).forEach(m => {
+      (messagesData || []).forEach((m: any) => {
         const message: Message = {
           id: m.id,
           contactId: m.contact_id,
           content: m.content,
-          type: m.type as 'text' | 'image' | 'document',
+          type: m.type as Message['type'],
           status: m.status as Message['status'],
           isOutgoing: m.is_outgoing,
           timestamp: new Date(m.created_at),
           mediaUrl: m.media_url || undefined,
+          whatsappMessageId: m.whatsapp_message_id || undefined,
+          templateName: m.template_name || undefined,
+          templateParams: m.template_params as Record<string, string> || undefined,
         };
         
         if (!messagesMap[m.contact_id]) {
@@ -207,13 +175,27 @@ export const useAppStore = create<AppState>((set, get) => ({
         lastMessages[m.contact_id] = message;
       });
 
-      // Create chats from contacts
-      const chats: Chat[] = contacts.map(contact => ({
-        id: contact.id,
-        contact,
-        lastMessage: lastMessages[contact.id],
-        unreadCount: 0,
-      }));
+      // Create chats from contacts (filter out archived)
+      const chats: Chat[] = contacts
+        .filter(c => !c.isArchived)
+        .map(contact => ({
+          id: contact.id,
+          contact,
+          lastMessage: lastMessages[contact.id],
+          unreadCount: 0,
+          isPinned: contact.isPinned,
+          isMuted: contact.isMuted,
+          isArchived: contact.isArchived,
+        }));
+
+      // Sort chats: pinned first, then by last message time
+      chats.sort((a, b) => {
+        if (a.isPinned && !b.isPinned) return -1;
+        if (!a.isPinned && b.isPinned) return 1;
+        const aTime = a.lastMessage?.timestamp.getTime() || 0;
+        const bTime = b.lastMessage?.timestamp.getTime() || 0;
+        return bTime - aTime;
+      });
 
       set({ 
         contacts, 
