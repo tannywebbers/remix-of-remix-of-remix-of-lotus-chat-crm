@@ -7,7 +7,6 @@ import { NotificationSettings } from '@/components/settings/NotificationSettings
 import { WhatsAppBusinessProfile } from '@/components/settings/WhatsAppBusinessProfile';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -35,92 +34,84 @@ export function SettingsPage() {
   const { user } = useAuth();
 
   useEffect(() => {
-    if (user) {
-      checkConnectionStatus();
-    }
+    if (user) checkConnectionStatus();
   }, [user]);
 
   const checkConnectionStatus = async () => {
     if (!user) return;
     try {
       const { data } = await supabase
-        .from('whatsapp_settings' as any)
+        .from('whatsapp_settings')
         .select('is_connected')
         .eq('user_id', user.id)
         .maybeSingle();
-      
-      setIsConnected((data as any)?.is_connected || false);
-    } catch (error) {
-      console.error('Error checking connection:', error);
-    }
+      setIsConnected(data?.is_connected || false);
+    } catch {}
   };
 
-  // Show settings list
-  if (!activeTab) {
+  // Show settings sub-page with back nav
+  if (activeTab) {
+    const currentTab = settingsTabs.find(t => t.id === activeTab);
     return (
-      <ScrollArea className="h-full">
-        <div className="min-h-full bg-background">
-          <div className="divide-y divide-panel-border bg-card">
-            {settingsTabs.map(({ id, label, icon: Icon, description, showBadge }) => (
-              <button
-                key={id}
-                onClick={() => setActiveTab(id)}
-                className="w-full flex items-center gap-4 p-4 hover:bg-accent/50 transition-colors active:bg-accent/70"
-              >
-                <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                  <Icon className="h-5 w-5 text-primary" />
-                </div>
-                <div className="flex-1 text-left min-w-0">
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium">{label}</p>
-                    {showBadge && (
-                      <Badge 
-                        variant={isConnected ? 'default' : 'secondary'}
-                        className="text-[10px] px-1.5 py-0"
-                      >
-                        {isConnected ? 'Connected' : 'Not Connected'}
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground truncate">{description}</p>
-                </div>
-                <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0" />
-              </button>
-            ))}
+      <div className="flex flex-col h-full bg-background">
+        {/* Sub-page header */}
+        <div className="flex items-center gap-1 px-2 pt-2 pb-1 bg-panel shrink-0">
+          <Button variant="ghost" size="icon" onClick={() => setActiveTab(null)} className="h-9 w-9 text-primary">
+            <ArrowLeft className="h-6 w-6" />
+          </Button>
+          <h1 className="text-[17px] font-semibold">{currentTab?.label}</h1>
+        </div>
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <div className="p-4">
+            {activeTab === 'business' && <WhatsAppBusinessProfile />}
+            {activeTab === 'api' && <WhatsAppApiSettings onConnectionChange={setIsConnected} />}
+            {activeTab === 'notifications' && <NotificationSettings />}
+            {activeTab === 'theme' && <ThemeSettings />}
+            {activeTab === 'account' && <AccountSettings />}
           </div>
         </div>
-      </ScrollArea>
+      </div>
     );
   }
 
-  // Show specific setting page
-  const currentTab = settingsTabs.find(t => t.id === activeTab);
-
+  // Settings list - scrollable, no extra header since MobileLayout shows "Settings" via ChatList
   return (
-    <div className="min-h-full bg-background flex flex-col">
-      {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3 bg-panel-header border-b border-panel-border shrink-0">
-        <Button 
-          variant="ghost" 
-          size="icon"
-          onClick={() => setActiveTab(null)}
-          className="h-9 w-9"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <h1 className="text-lg font-semibold">{currentTab?.label}</h1>
+    <div className="flex flex-col h-full bg-background">
+      {/* Title for settings list */}
+      <div className="px-4 pt-3 pb-1 bg-panel shrink-0">
+        <h1 className="text-[34px] font-bold tracking-tight text-foreground">Settings</h1>
       </div>
 
-      {/* Content */}
-      <ScrollArea className="flex-1">
-        <div className="p-4">
-          {activeTab === 'business' && <WhatsAppBusinessProfile />}
-          {activeTab === 'api' && <WhatsAppApiSettings onConnectionChange={setIsConnected} />}
-          {activeTab === 'notifications' && <NotificationSettings />}
-          {activeTab === 'theme' && <ThemeSettings />}
-          {activeTab === 'account' && <AccountSettings />}
+      <div className="flex-1 overflow-y-auto custom-scrollbar">
+        <div className="bg-card mt-2">
+          {settingsTabs.map(({ id, label, icon: Icon, description, showBadge }, index) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className="w-full flex items-center gap-4 px-4 py-[14px] hover:bg-accent/50 transition-colors active:bg-accent/70"
+            >
+              <div className="h-[38px] w-[38px] rounded-[10px] bg-primary/10 flex items-center justify-center shrink-0">
+                <Icon className="h-[20px] w-[20px] text-primary" />
+              </div>
+              <div className="flex-1 text-left min-w-0 border-b border-panel-border pb-[14px]">
+                <div className="flex items-center gap-2">
+                  <p className="text-[17px] font-medium">{label}</p>
+                  {showBadge && (
+                    <Badge 
+                      variant={isConnected ? 'default' : 'secondary'}
+                      className="text-[10px] px-1.5 py-0 h-[18px]"
+                    >
+                      {isConnected ? 'Connected' : 'Not Connected'}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-[13px] text-muted-foreground">{description}</p>
+              </div>
+              <ChevronRight className="h-[18px] w-[18px] text-muted-foreground/50 shrink-0" />
+            </button>
+          ))}
         </div>
-      </ScrollArea>
+      </div>
     </div>
   );
 }

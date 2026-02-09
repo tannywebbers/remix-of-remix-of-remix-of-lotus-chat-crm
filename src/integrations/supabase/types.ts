@@ -57,7 +57,10 @@ export type Database = {
           created_at: string
           day_type: number | null
           id: string
+          is_archived: boolean | null
+          is_muted: boolean | null
           is_online: boolean | null
+          is_pinned: boolean | null
           last_seen: string | null
           loan_id: string
           name: string
@@ -72,7 +75,10 @@ export type Database = {
           created_at?: string
           day_type?: number | null
           id?: string
+          is_archived?: boolean | null
+          is_muted?: boolean | null
           is_online?: boolean | null
+          is_pinned?: boolean | null
           last_seen?: string | null
           loan_id: string
           name: string
@@ -87,7 +93,10 @@ export type Database = {
           created_at?: string
           day_type?: number | null
           id?: string
+          is_archived?: boolean | null
+          is_muted?: boolean | null
           is_online?: boolean | null
+          is_pinned?: boolean | null
           last_seen?: string | null
           loan_id?: string
           name?: string
@@ -106,8 +115,11 @@ export type Database = {
           is_outgoing: boolean
           media_url: string | null
           status: string
+          template_name: string | null
+          template_params: Json | null
           type: string
           user_id: string
+          whatsapp_message_id: string | null
         }
         Insert: {
           contact_id: string
@@ -117,8 +129,11 @@ export type Database = {
           is_outgoing?: boolean
           media_url?: string | null
           status?: string
+          template_name?: string | null
+          template_params?: Json | null
           type?: string
           user_id: string
+          whatsapp_message_id?: string | null
         }
         Update: {
           contact_id?: string
@@ -128,8 +143,11 @@ export type Database = {
           is_outgoing?: boolean
           media_url?: string | null
           status?: string
+          template_name?: string | null
+          template_params?: Json | null
           type?: string
           user_id?: string
+          whatsapp_message_id?: string | null
         }
         Relationships: [
           {
@@ -167,6 +185,84 @@ export type Database = {
           id?: string
           name?: string | null
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      whatsapp_settings: {
+        Row: {
+          api_token: string | null
+          app_id: string | null
+          business_account_id: string | null
+          created_at: string
+          id: string
+          is_connected: boolean | null
+          phone_number_id: string | null
+          updated_at: string
+          user_id: string
+          verify_token: string | null
+          webhook_url: string | null
+        }
+        Insert: {
+          api_token?: string | null
+          app_id?: string | null
+          business_account_id?: string | null
+          created_at?: string
+          id?: string
+          is_connected?: boolean | null
+          phone_number_id?: string | null
+          updated_at?: string
+          user_id: string
+          verify_token?: string | null
+          webhook_url?: string | null
+        }
+        Update: {
+          api_token?: string | null
+          app_id?: string | null
+          business_account_id?: string | null
+          created_at?: string
+          id?: string
+          is_connected?: boolean | null
+          phone_number_id?: string | null
+          updated_at?: string
+          user_id?: string
+          verify_token?: string | null
+          webhook_url?: string | null
+        }
+        Relationships: []
+      }
+      whatsapp_templates: {
+        Row: {
+          category: string | null
+          components: Json | null
+          created_at: string
+          id: string
+          language: string | null
+          name: string
+          status: string | null
+          template_id: string
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          components?: Json | null
+          created_at?: string
+          id?: string
+          language?: string | null
+          name: string
+          status?: string | null
+          template_id: string
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          components?: Json | null
+          created_at?: string
+          id?: string
+          language?: string | null
+          name?: string
+          status?: string | null
+          template_id?: string
           user_id?: string
         }
         Relationships: []

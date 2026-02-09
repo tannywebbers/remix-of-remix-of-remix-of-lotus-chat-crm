@@ -4,8 +4,7 @@ import { ContactAvatar } from '@/components/shared/ContactAvatar';
 import { MessageStatus } from '@/components/shared/MessageStatus';
 import { formatChatTime } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
-import { Pin, BellOff, Archive, Trash2, MessageSquareOff, X } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { Pin, BellOff, Archive, Trash2, MessageSquareOff } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,7 +34,7 @@ interface ChatListItemProps {
 
 export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
   const { contact, lastMessage, unreadCount, isPinned, isMuted } = chat;
-  const { updateContact, setMessages, messages, chats, setChats } = useAppStore();
+  const { updateContact, setMessages, chats, setChats } = useAppStore();
   const { toast } = useToast();
   const [showOptions, setShowOptions] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -50,12 +49,8 @@ export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
   };
 
   const handleTouchEnd = () => {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current);
-    }
-    if (!isLongPress) {
-      onClick();
-    }
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    if (!isLongPress) onClick();
     setIsLongPress(false);
   };
 
@@ -64,28 +59,15 @@ export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
     setShowOptions(true);
   };
 
-  // FIXED: Delete chat only removes messages, NOT the contact
   const handleDeleteChat = async () => {
     try {
-      // Delete only messages for this contact
-      const { error } = await supabase
-        .from('messages')
-        .delete()
-        .eq('contact_id', chat.id);
-      
+      const { error } = await supabase.from('messages').delete().eq('contact_id', chat.id);
       if (error) throw error;
-
-      // Clear messages from local state
       setMessages(chat.id, []);
-      
-      // Update the chat to remove last message
       const updatedChats = chats.map(c => 
-        c.id === chat.id 
-          ? { ...c, lastMessage: undefined, unreadCount: 0 }
-          : c
+        c.id === chat.id ? { ...c, lastMessage: undefined, unreadCount: 0 } : c
       );
       setChats(updatedChats);
-      
       toast({ title: 'Chat cleared', description: 'Messages deleted. Contact preserved.' });
     } catch (error) {
       console.error('Error deleting chat:', error);
@@ -99,12 +81,10 @@ export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
     try {
       const field = action === 'pin' ? 'is_pinned' : action === 'mute' ? 'is_muted' : 'is_archived';
       const currentValue = action === 'pin' ? isPinned : action === 'mute' ? isMuted : false;
-      
       await supabase.from('contacts').update({ [field]: !currentValue }).eq('id', chat.id);
       updateContact(chat.id, { 
         [action === 'pin' ? 'isPinned' : action === 'mute' ? 'isMuted' : 'isArchived']: !currentValue 
       } as any);
-      
       toast({ 
         title: action === 'pin' 
           ? (currentValue ? 'Chat unpinned' : 'Chat pinned')
@@ -113,7 +93,6 @@ export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
           : 'Archived'
       });
     } catch (error) {
-      console.error(`Error ${action}ing chat:`, error);
       toast({ title: `Failed to ${action} chat`, variant: 'destructive' });
     }
     setShowOptions(false);
@@ -121,62 +100,60 @@ export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
   
   return (
     <>
-      <div className="relative group">
+      <div className="relative">
         <button
           onClick={onClick}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
           onContextMenu={handleContextMenu}
           className={cn(
-            'w-full flex items-center gap-3 px-4 py-3 transition-colors text-left',
+            'w-full flex items-center gap-3 px-4 py-[10px] transition-colors text-left',
             'hover:bg-accent/50 active:bg-accent/70',
             isActive && 'bg-accent'
           )}
         >
-          <ContactAvatar
-            name={contact.name}
-            avatar={contact.avatar}
-            isOnline={contact.isOnline}
-            size="md"
-          />
+          <ContactAvatar name={contact.name} avatar={contact.avatar} isOnline={contact.isOnline} size="md" />
           
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 border-b border-panel-border pb-[10px]">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className="font-semibold text-[15px] truncate">{contact.name}</span>
-                {isPinned && <Pin className="h-3 w-3 text-muted-foreground shrink-0" />}
-                {isMuted && <BellOff className="h-3 w-3 text-muted-foreground shrink-0" />}
+                <span className="font-semibold text-[17px] truncate text-foreground">{contact.name}</span>
               </div>
-              {lastMessage && (
-                <span className={cn(
-                  'text-xs shrink-0 ml-2',
-                  unreadCount > 0 ? 'text-primary font-semibold' : 'text-muted-foreground'
-                )}>
-                  {formatChatTime(lastMessage.timestamp)}
-                </span>
-              )}
+              <div className="flex items-center gap-1 shrink-0 ml-2">
+                {lastMessage && (
+                  <span className={cn(
+                    'text-[13px]',
+                    unreadCount > 0 ? 'text-primary font-semibold' : 'text-muted-foreground'
+                  )}>
+                    {formatChatTime(lastMessage.timestamp)}
+                  </span>
+                )}
+              </div>
             </div>
             
-            <div className="flex items-center justify-between mt-0.5">
-              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+            <div className="flex items-center justify-between mt-[2px]">
+              <div className="flex items-center gap-1 min-w-0 flex-1">
                 {lastMessage?.isOutgoing && (
-                  <MessageStatus status={lastMessage.status} />
+                  <MessageStatus status={lastMessage.status} className="h-[16px] w-[16px]" />
                 )}
-                <span className="text-sm text-muted-foreground truncate">
+                <span className="text-[15px] text-muted-foreground truncate leading-tight">
                   {lastMessage?.content || 'No messages yet'}
                 </span>
               </div>
               
-              {unreadCount > 0 && (
-                <span className="ml-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-bold text-primary-foreground shrink-0">
-                  {unreadCount}
-                </span>
-              )}
+              <div className="flex items-center gap-1 shrink-0 ml-2">
+                {isPinned && <Pin className="h-[14px] w-[14px] text-muted-foreground fill-muted-foreground" />}
+                {isMuted && <BellOff className="h-[14px] w-[14px] text-muted-foreground" />}
+                {unreadCount > 0 && (
+                  <span className="flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-primary px-1.5 text-[12px] font-bold text-primary-foreground">
+                    {unreadCount}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </button>
 
-        {/* Options Menu */}
         <DropdownMenu open={showOptions} onOpenChange={setShowOptions}>
           <DropdownMenuTrigger asChild>
             <span className="sr-only">Options</span>
@@ -206,22 +183,17 @@ export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
         </DropdownMenu>
       </div>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete chat?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will delete all messages in this chat. The contact "{contact.name}" will be preserved. 
-              To delete the contact, go to Contacts tab.
+              This will delete all messages in this chat. The contact "{contact.name}" will be preserved.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={handleDeleteChat}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
+            <AlertDialogAction onClick={handleDeleteChat} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Delete messages
             </AlertDialogAction>
           </AlertDialogFooter>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MessageCircle, Users, Settings, Plus, Search, Edit, Star } from 'lucide-react';
+import { MessageCircle, Users, Settings, Plus, Search, SquarePen, Star } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { ChatListItem } from '@/components/chat/ChatListItem';
@@ -30,23 +30,18 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
 
-  // Filter chats based on search and filter tab
   const filteredChats = chats
     .filter(chat => {
       const matchesSearch = chat.contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         chat.contact.phone.includes(searchQuery);
-      
       if (!matchesSearch) return false;
-
       if (chatFilter === 'unread') return chat.unreadCount > 0;
       if (chatFilter === 'favorites') return chat.isPinned;
       return true;
     })
     .sort((a, b) => {
-      // Pinned first
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
-      // Then by last message time
       const aTime = a.lastMessage?.timestamp.getTime() || 0;
       const bTime = b.lastMessage?.timestamp.getTime() || 0;
       return bTime - aTime;
@@ -63,49 +58,40 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     onChatSelect?.(chat);
   };
 
-  // Get section title based on view mode
-  const getSectionTitle = () => {
-    switch (viewMode) {
-      case 'chats': return 'Chats';
-      case 'contacts': return 'Contacts';
-      case 'settings': return 'Settings';
-      default: return 'Chats';
-    }
-  };
+  // Section title
+  const sectionTitle = viewMode === 'contacts' ? 'Contacts' : viewMode === 'settings' ? 'Settings' : 'Chats';
 
   return (
     <div className="flex flex-col h-full bg-panel border-r border-panel-border">
-      {/* Header - iOS Style */}
-      <div className="flex items-center justify-between px-4 py-3 bg-panel-header border-b border-panel-border shrink-0">
-        <h1 className="text-2xl font-bold text-foreground">{getSectionTitle()}</h1>
+      {/* Header - iOS WhatsApp Style */}
+      <div className="flex items-center justify-between px-4 pt-3 pb-1 bg-panel shrink-0">
+        <h1 className="text-[34px] font-bold tracking-tight text-foreground">{sectionTitle}</h1>
         <div className="flex items-center gap-1">
           {viewMode === 'chats' && (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-9 w-9 text-primary"
-                onClick={onNewChat}
-              >
-                <Edit className="h-5 w-5" />
-              </Button>
-            </>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-10 w-10 text-primary"
+              onClick={onNewChat}
+            >
+              <SquarePen className="h-[22px] w-[22px]" />
+            </Button>
           )}
           {viewMode === 'contacts' && (
             <Button
               variant="ghost"
               size="icon"
-              className="h-9 w-9 text-primary"
+              className="h-10 w-10 text-primary"
               onClick={() => setShowAddContactModal(true)}
             >
-              <Plus className="h-5 w-5" />
+              <Plus className="h-[22px] w-[22px] stroke-[2.5px]" />
             </Button>
           )}
         </div>
       </div>
 
-      {/* Search */}
-      <div className="p-3 border-b border-panel-border shrink-0">
+      {/* Search - iOS Style */}
+      <div className="px-4 py-2 shrink-0">
         <SearchInput
           value={searchQuery}
           onChange={setSearchQuery}
@@ -113,18 +99,18 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         />
       </div>
 
-      {/* Chat Filter Tabs - iOS Style */}
+      {/* Chat Filter Tabs - WhatsApp iOS pill style */}
       {viewMode === 'chats' && (
-        <div className="flex px-3 py-2 gap-2 border-b border-panel-border shrink-0 overflow-x-auto">
+        <div className="flex px-4 py-1.5 gap-2 shrink-0">
           {(['all', 'unread', 'favorites'] as ChatFilter[]).map((filter) => (
             <button
               key={filter}
               onClick={() => setChatFilter(filter)}
               className={cn(
-                'px-4 py-1.5 text-sm font-medium rounded-full transition-colors whitespace-nowrap',
+                'px-4 py-[6px] text-[13px] font-semibold rounded-full transition-all',
                 chatFilter === filter
                   ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  : 'bg-muted text-muted-foreground'
               )}
             >
               {filter === 'all' ? 'All' : filter === 'unread' ? 'Unread' : 'Favorites'}
@@ -133,21 +119,21 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         </div>
       )}
 
-      {/* Content */}
+      {/* Content - Scrollable */}
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         {viewMode === 'chats' && (
           <>
             {filteredChats.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4">
-                <MessageCircle className="h-12 w-12 mb-3 opacity-50" />
-                <p className="text-sm font-medium">
+                <MessageCircle className="h-14 w-14 mb-3 opacity-40" />
+                <p className="text-[15px] font-medium">
                   {chatFilter === 'unread' 
                     ? 'No unread messages' 
                     : chatFilter === 'favorites' 
                     ? 'No favorite chats'
                     : 'No chats yet'}
                 </p>
-                <p className="text-xs mt-1">
+                <p className="text-[13px] mt-1">
                   {chatFilter === 'all' && 'Add contacts to start chatting'}
                 </p>
               </div>
@@ -166,20 +152,20 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
         {viewMode === 'contacts' && (
           <>
-            <Button
+            <button
               onClick={() => setShowAddContactModal(true)}
-              className="w-full justify-start gap-3 rounded-none h-14 px-4 border-b border-panel-border bg-transparent hover:bg-accent/50 text-foreground"
+              className="w-full flex items-center gap-4 px-4 py-3 hover:bg-accent/50 transition-colors border-b border-panel-border"
             >
-              <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center">
-                <Plus className="h-5 w-5 text-primary-foreground" />
+              <div className="h-[42px] w-[42px] rounded-full bg-primary flex items-center justify-center">
+                <Plus className="h-5 w-5 text-primary-foreground stroke-[2.5px]" />
               </div>
-              <span className="font-medium">New Contact</span>
-            </Button>
+              <span className="text-[17px] font-medium text-primary">New Contact</span>
+            </button>
             
             {filteredContacts.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-muted-foreground p-4">
-                <Users className="h-12 w-12 mb-3 opacity-50" />
-                <p className="text-sm">No contacts found</p>
+                <Users className="h-14 w-14 mb-3 opacity-40" />
+                <p className="text-[15px]">No contacts found</p>
               </div>
             ) : (
               filteredContacts.map(contact => (
@@ -197,12 +183,6 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
               ))
             )}
           </>
-        )}
-
-        {viewMode === 'settings' && (
-          <div className="p-4 text-center text-muted-foreground">
-            <p className="text-sm">Click Settings icon on mobile to open full settings</p>
-          </div>
         )}
       </div>
     </div>
