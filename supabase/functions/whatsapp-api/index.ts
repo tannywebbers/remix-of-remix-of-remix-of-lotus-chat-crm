@@ -204,6 +204,63 @@ serve(async (req) => {
         );
       }
 
+      case 'get_business_profile': {
+        const { token, phoneNumberId } = params;
+        
+        // Get phone number details
+        const phoneResponse = await fetch(
+          `${WHATSAPP_API_URL}/${phoneNumberId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          }
+        );
+
+        let phoneNumber = '';
+        if (phoneResponse.ok) {
+          const phoneData = await phoneResponse.json();
+          phoneNumber = phoneData.display_phone_number || '';
+        }
+
+        // Get business profile
+        const profileResponse = await fetch(
+          `${WHATSAPP_API_URL}/${phoneNumberId}/whatsapp_business_profile?fields=about,address,description,email,profile_picture_url,websites,vertical`,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!profileResponse.ok) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Failed to get business profile' }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        const profileData = await profileResponse.json();
+        const profile = profileData.data?.[0] || {};
+        
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            phoneNumber,
+            profile: {
+              name: profile.vertical || 'Business',
+              description: profile.about || profile.description,
+              address: profile.address,
+              email: profile.email,
+              website: profile.websites?.[0],
+              vertical: profile.vertical,
+              profilePictureUrl: profile.profile_picture_url,
+            }
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       default:
         return new Response(
           JSON.stringify({ error: 'Unknown action' }),

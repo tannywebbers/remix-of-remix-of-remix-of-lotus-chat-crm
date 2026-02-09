@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { MessageCircle, Users, Settings, ArrowLeft } from 'lucide-react';
+import { MessageCircle, Users, Settings, ArrowLeft, Plus } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { ChatList } from '@/components/chat/ChatList';
 import { ChatView } from '@/components/chat/ChatView';
 import { ContactPanel } from '@/components/contacts/ContactPanel';
 import { AddContactModal } from '@/components/contacts/AddContactModal';
 import { SettingsPage } from '@/components/settings/SettingsPage';
+import { NewChatModal } from '@/components/chat/NewChatModal';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ViewMode } from '@/types';
@@ -17,8 +18,9 @@ const navItems: { mode: ViewMode; icon: typeof MessageCircle; label: string }[] 
 ];
 
 export function MobileLayout() {
-  const { viewMode, setViewMode, activeChat, setActiveChat, showContactPanel, setShowContactPanel } = useAppStore();
+  const { viewMode, setViewMode, activeChat, setActiveChat, showContactPanel, setShowContactPanel, chats } = useAppStore();
   const [showChatView, setShowChatView] = useState(false);
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
 
   // Handle opening a chat
   const handleOpenChat = (chat: any) => {
@@ -30,6 +32,15 @@ export function MobileLayout() {
   const handleBackFromChat = () => {
     setShowChatView(false);
     setActiveChat(null);
+  };
+
+  // Handle new chat selection
+  const handleNewChatSelect = (contact: any) => {
+    const chat = chats.find(c => c.contact.id === contact.id);
+    if (chat) {
+      handleOpenChat(chat);
+    }
+    setShowNewChatModal(false);
   };
 
   // Show settings as full page
@@ -88,34 +99,42 @@ export function MobileLayout() {
     );
   }
 
-  // Default: Show chat list with bottom navigation
+  // Default: Show chat/contacts list with bottom navigation
   return (
     <div className="h-[100dvh] flex flex-col bg-background">
       {/* Main Content */}
       <div className="flex-1 overflow-hidden">
-        <ChatList onChatSelect={handleOpenChat} />
+        <ChatList 
+          onChatSelect={handleOpenChat} 
+          onNewChat={() => setShowNewChatModal(true)}
+        />
       </div>
 
-      {/* Bottom Navigation */}
+      {/* Bottom Navigation - iOS Tab Bar Style */}
       <nav className="flex items-center justify-around bg-panel-header border-t border-panel-border py-2 pb-safe shrink-0">
         {navItems.map(({ mode, icon: Icon, label }) => (
           <button
             key={mode}
             onClick={() => setViewMode(mode)}
             className={cn(
-              'flex flex-col items-center gap-1 px-6 py-2 rounded-lg transition-colors',
+              'flex flex-col items-center gap-0.5 px-6 py-1.5 rounded-lg transition-colors min-w-[72px]',
               viewMode === mode 
                 ? 'text-primary' 
-                : 'text-muted-foreground hover:text-foreground'
+                : 'text-muted-foreground'
             )}
           >
             <Icon className="h-6 w-6" />
-            <span className="text-xs font-medium">{label}</span>
+            <span className="text-[10px] font-medium">{label}</span>
           </button>
         ))}
       </nav>
 
       <AddContactModal />
+      <NewChatModal 
+        open={showNewChatModal} 
+        onClose={() => setShowNewChatModal(false)}
+        onSelectContact={handleNewChatSelect}
+      />
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MoreVertical, Archive, Pin, BellOff, Bell, Trash2, Volume2 } from 'lucide-react';
+import { MoreVertical, Archive, Pin, BellOff, Bell, MessageSquareOff, User, Search, Wallpaper, Eraser, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -8,56 +8,69 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useAppStore } from '@/store/appStore';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 
 interface ChatOptionsMenuProps {
   chatId: string;
+  contactName: string;
   isPinned?: boolean;
   isMuted?: boolean;
   isArchived?: boolean;
+  onViewContact?: () => void;
+  onSearch?: () => void;
   onClose?: () => void;
 }
 
-export function ChatOptionsMenu({ chatId, isPinned, isMuted, isArchived, onClose }: ChatOptionsMenuProps) {
-  const { updateContact, deleteContact } = useAppStore();
+export function ChatOptionsMenu({ 
+  chatId, 
+  contactName,
+  isPinned, 
+  isMuted, 
+  isArchived, 
+  onViewContact,
+  onSearch,
+  onClose 
+}: ChatOptionsMenuProps) {
+  const { updateContact, setMessages, chats, setChats } = useAppStore();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
+  const [showClearDialog, setShowClearDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  const handleAction = async (action: 'pin' | 'mute' | 'archive' | 'delete') => {
+  const handleAction = async (action: 'pin' | 'mute' | 'archive') => {
     try {
-      if (action === 'delete') {
-        const { error } = await supabase
-          .from('contacts')
-          .delete()
-          .eq('id', chatId);
-        
-        if (error) throw error;
-        deleteContact(chatId);
-        toast({ title: 'Chat deleted' });
-      } else {
-        const field = action === 'pin' ? 'is_pinned' : action === 'mute' ? 'is_muted' : 'is_archived';
-        const currentValue = action === 'pin' ? isPinned : action === 'mute' ? isMuted : isArchived;
-        
-        const { error } = await supabase
-          .from('contacts')
-          .update({ [field]: !currentValue })
-          .eq('id', chatId);
-        
-        if (error) throw error;
-        
-        const updateField = action === 'pin' ? 'isPinned' : action === 'mute' ? 'isMuted' : 'isArchived';
-        updateContact(chatId, { [updateField]: !currentValue } as any);
-        
-        toast({ 
-          title: action === 'pin' 
-            ? (currentValue ? 'Chat unpinned' : 'Chat pinned')
-            : action === 'mute'
-            ? (currentValue ? 'Notifications unmuted' : 'Notifications muted')
-            : (currentValue ? 'Chat unarchived' : 'Chat archived')
-        });
-      }
+      const field = action === 'pin' ? 'is_pinned' : action === 'mute' ? 'is_muted' : 'is_archived';
+      const currentValue = action === 'pin' ? isPinned : action === 'mute' ? isMuted : isArchived;
+      
+      const { error } = await supabase
+        .from('contacts')
+        .update({ [field]: !currentValue })
+        .eq('id', chatId);
+      
+      if (error) throw error;
+      
+      const updateField = action === 'pin' ? 'isPinned' : action === 'mute' ? 'isMuted' : 'isArchived';
+      updateContact(chatId, { [updateField]: !currentValue } as any);
+      
+      toast({ 
+        title: action === 'pin' 
+          ? (currentValue ? 'Chat unpinned' : 'Chat pinned')
+          : action === 'mute'
+          ? (currentValue ? 'Notifications unmuted' : 'Notifications muted')
+          : (currentValue ? 'Chat unarchived' : 'Chat archived')
+      });
     } catch (error) {
       console.error(`Error ${action}ing chat:`, error);
       toast({ title: 'Error', description: `Failed to ${action} chat`, variant: 'destructive' });
@@ -67,32 +80,122 @@ export function ChatOptionsMenu({ chatId, isPinned, isMuted, isArchived, onClose
     onClose?.();
   };
 
+  // Clear chat - delete messages only
+  const handleClearChat = async () => {
+    try {
+      const { error } = await supabase
+        .from('messages')
+        .delete()
+        .eq('contact_id', chatId);
+      
+      if (error) throw error;
+
+      setMessages(chatId, []);
+      
+      const updatedChats = chats.map(c => 
+        c.id === chatId 
+          ? { ...c, lastMessage: undefined, unreadCount: 0 }
+          : c
+      );
+      setChats(updatedChats);
+      
+      toast({ title: 'Chat cleared' });
+    } catch (error) {
+      console.error('Error clearing chat:', error);
+      toast({ title: 'Failed to clear chat', variant: 'destructive' });
+    }
+    setShowClearDialog(false);
+    setOpen(false);
+    onClose?.();
+  };
+
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-8 w-8">
-          <MoreVertical className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48">
-        <DropdownMenuItem onClick={() => handleAction('pin')}>
-          <Pin className="h-4 w-4 mr-2" />
-          {isPinned ? 'Unpin chat' : 'Pin chat'}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleAction('mute')}>
-          {isMuted ? <Bell className="h-4 w-4 mr-2" /> : <BellOff className="h-4 w-4 mr-2" />}
-          {isMuted ? 'Unmute' : 'Mute notifications'}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handleAction('archive')}>
-          <Archive className="h-4 w-4 mr-2" />
-          {isArchived ? 'Unarchive chat' : 'Archive chat'}
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => handleAction('delete')} className="text-destructive focus:text-destructive">
-          <Trash2 className="h-4 w-4 mr-2" />
-          Delete chat
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu open={open} onOpenChange={setOpen}>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-9 w-9">
+            <MoreVertical className="h-5 w-5 text-muted-foreground" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-52">
+          <DropdownMenuItem onClick={onViewContact}>
+            <User className="h-4 w-4 mr-3" />
+            View contact
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onSearch}>
+            <Search className="h-4 w-4 mr-3" />
+            Search
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => handleAction('mute')}>
+            {isMuted ? <Bell className="h-4 w-4 mr-3" /> : <BellOff className="h-4 w-4 mr-3" />}
+            {isMuted ? 'Unmute' : 'Mute'}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleAction('pin')}>
+            <Pin className="h-4 w-4 mr-3" />
+            {isPinned ? 'Unpin' : 'Pin'}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleAction('archive')}>
+            <Archive className="h-4 w-4 mr-3" />
+            {isArchived ? 'Unarchive' : 'Archive'}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => setShowClearDialog(true)}>
+            <Eraser className="h-4 w-4 mr-3" />
+            Clear chat
+          </DropdownMenuItem>
+          <DropdownMenuItem 
+            onClick={() => setShowDeleteDialog(true)} 
+            className="text-destructive focus:text-destructive"
+          >
+            <MessageSquareOff className="h-4 w-4 mr-3" />
+            Delete chat
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Clear Chat Dialog */}
+      <AlertDialog open={showClearDialog} onOpenChange={setShowClearDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Clear chat?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete all messages in this chat. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleClearChat}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Clear
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Chat Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete chat?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will delete all messages in this chat. The contact "{contactName}" will be preserved. 
+              To delete the contact, go to Contacts tab.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={handleClearChat}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete chat
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

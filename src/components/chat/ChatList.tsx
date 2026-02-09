@@ -1,4 +1,5 @@
-import { MessageCircle, Users, Settings, Plus } from 'lucide-react';
+import { useState } from 'react';
+import { MessageCircle, Users, Settings, Plus, Search, Edit, Star } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { ChatListItem } from '@/components/chat/ChatListItem';
@@ -7,17 +8,14 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ViewMode } from '@/types';
 
-const navItems: { mode: ViewMode; icon: typeof MessageCircle; label: string }[] = [
-  { mode: 'chats', icon: MessageCircle, label: 'Chats' },
-  { mode: 'contacts', icon: Users, label: 'Contacts' },
-  { mode: 'settings', icon: Settings, label: 'Settings' },
-];
+type ChatFilter = 'all' | 'unread' | 'favorites';
 
 interface ChatListProps {
   onChatSelect?: (chat: any) => void;
+  onNewChat?: () => void;
 }
 
-export function ChatList({ onChatSelect }: ChatListProps) {
+export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const { 
     viewMode, 
     setViewMode, 
@@ -30,10 +28,29 @@ export function ChatList({ onChatSelect }: ChatListProps) {
     setShowAddContactModal,
   } = useAppStore();
 
-  const filteredChats = chats.filter(chat =>
-    chat.contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    chat.contact.phone.includes(searchQuery)
-  );
+  const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
+
+  // Filter chats based on search and filter tab
+  const filteredChats = chats
+    .filter(chat => {
+      const matchesSearch = chat.contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        chat.contact.phone.includes(searchQuery);
+      
+      if (!matchesSearch) return false;
+
+      if (chatFilter === 'unread') return chat.unreadCount > 0;
+      if (chatFilter === 'favorites') return chat.isPinned;
+      return true;
+    })
+    .sort((a, b) => {
+      // Pinned first
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      // Then by last message time
+      const aTime = a.lastMessage?.timestamp.getTime() || 0;
+      const bTime = b.lastMessage?.timestamp.getTime() || 0;
+      return bTime - aTime;
+    });
 
   const filteredContacts = contacts.filter(contact =>
     contact.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -46,26 +63,44 @@ export function ChatList({ onChatSelect }: ChatListProps) {
     onChatSelect?.(chat);
   };
 
+  // Get section title based on view mode
+  const getSectionTitle = () => {
+    switch (viewMode) {
+      case 'chats': return 'Chats';
+      case 'contacts': return 'Contacts';
+      case 'settings': return 'Settings';
+      default: return 'Chats';
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-panel border-r border-panel-border">
-      {/* Header */}
+      {/* Header - iOS Style */}
       <div className="flex items-center justify-between px-4 py-3 bg-panel-header border-b border-panel-border shrink-0">
-        <h1 className="text-xl font-semibold text-primary">Lotus</h1>
-        <div className="flex items-center gap-2">
-          {navItems.map(({ mode, icon: Icon }) => (
+        <h1 className="text-2xl font-bold text-foreground">{getSectionTitle()}</h1>
+        <div className="flex items-center gap-1">
+          {viewMode === 'chats' && (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-9 w-9 text-primary"
+                onClick={onNewChat}
+              >
+                <Edit className="h-5 w-5" />
+              </Button>
+            </>
+          )}
+          {viewMode === 'contacts' && (
             <Button
-              key={mode}
               variant="ghost"
               size="icon"
-              onClick={() => setViewMode(mode)}
-              className={cn(
-                'h-9 w-9',
-                viewMode === mode && 'bg-accent text-primary'
-              )}
+              className="h-9 w-9 text-primary"
+              onClick={() => setShowAddContactModal(true)}
             >
-              <Icon className="h-5 w-5" />
+              <Plus className="h-5 w-5" />
             </Button>
-          ))}
+          )}
         </div>
       </div>
 
@@ -74,9 +109,29 @@ export function ChatList({ onChatSelect }: ChatListProps) {
         <SearchInput
           value={searchQuery}
           onChange={setSearchQuery}
-          placeholder={viewMode === 'contacts' ? 'Search contacts...' : 'Search chats...'}
+          placeholder={viewMode === 'contacts' ? 'Search contacts' : 'Search'}
         />
       </div>
+
+      {/* Chat Filter Tabs - iOS Style */}
+      {viewMode === 'chats' && (
+        <div className="flex px-3 py-2 gap-2 border-b border-panel-border shrink-0 overflow-x-auto">
+          {(['all', 'unread', 'favorites'] as ChatFilter[]).map((filter) => (
+            <button
+              key={filter}
+              onClick={() => setChatFilter(filter)}
+              className={cn(
+                'px-4 py-1.5 text-sm font-medium rounded-full transition-colors whitespace-nowrap',
+                chatFilter === filter
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+              )}
+            >
+              {filter === 'all' ? 'All' : filter === 'unread' ? 'Unread' : 'Favorites'}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto custom-scrollbar">
@@ -85,24 +140,26 @@ export function ChatList({ onChatSelect }: ChatListProps) {
             {filteredChats.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4">
                 <MessageCircle className="h-12 w-12 mb-3 opacity-50" />
-                <p className="text-sm">No chats yet</p>
-                <p className="text-xs mt-1">Add contacts to start chatting</p>
+                <p className="text-sm font-medium">
+                  {chatFilter === 'unread' 
+                    ? 'No unread messages' 
+                    : chatFilter === 'favorites' 
+                    ? 'No favorite chats'
+                    : 'No chats yet'}
+                </p>
+                <p className="text-xs mt-1">
+                  {chatFilter === 'all' && 'Add contacts to start chatting'}
+                </p>
               </div>
             ) : (
-              filteredChats
-                .sort((a, b) => {
-                  const aTime = a.lastMessage?.timestamp.getTime() || 0;
-                  const bTime = b.lastMessage?.timestamp.getTime() || 0;
-                  return bTime - aTime;
-                })
-                .map(chat => (
-                  <ChatListItem
-                    key={chat.id}
-                    chat={chat}
-                    isActive={activeChat?.id === chat.id}
-                    onClick={() => handleChatClick(chat)}
-                  />
-                ))
+              filteredChats.map(chat => (
+                <ChatListItem
+                  key={chat.id}
+                  chat={chat}
+                  isActive={activeChat?.id === chat.id}
+                  onClick={() => handleChatClick(chat)}
+                />
+              ))
             )}
           </>
         )}
@@ -116,7 +173,7 @@ export function ChatList({ onChatSelect }: ChatListProps) {
               <div className="h-10 w-10 rounded-full bg-primary flex items-center justify-center">
                 <Plus className="h-5 w-5 text-primary-foreground" />
               </div>
-              <span className="font-medium">Add Contact</span>
+              <span className="font-medium">New Contact</span>
             </Button>
             
             {filteredContacts.length === 0 ? (

@@ -1,21 +1,27 @@
 import { useState, useEffect } from 'react';
-import { Key, Smartphone, Building, Link, TestTube, Copy, RefreshCw, Loader2 } from 'lucide-react';
+import { Key, Smartphone, Building, Link, TestTube, Copy, RefreshCw, Loader2, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
-export function WhatsAppApiSettings() {
+interface WhatsAppApiSettingsProps {
+  onConnectionChange?: (connected: boolean) => void;
+}
+
+export function WhatsAppApiSettings({ onConnectionChange }: WhatsAppApiSettingsProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [webhookGenerated, setWebhookGenerated] = useState(false);
   
   const [settings, setSettings] = useState({
     apiToken: '',
@@ -54,16 +60,7 @@ export function WhatsAppApiSettings() {
           verifyToken: typedData.verify_token || '',
           isConnected: typedData.is_connected || false,
         });
-      } else {
-        // Generate webhook URL and verify token for new users
-        const verifyToken = generateVerifyToken();
-        const webhookUrl = `https://fattyvnmuezlaumtxbva.supabase.co/functions/v1/whatsapp-webhook?user_id=${user.id}`;
-        
-        setSettings(prev => ({
-          ...prev,
-          webhookUrl,
-          verifyToken,
-        }));
+        setWebhookGenerated(!!typedData.webhook_url);
       }
     } catch (error) {
       console.error('Error loading settings:', error);
@@ -76,22 +73,70 @@ export function WhatsAppApiSettings() {
     return 'lotus_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
   };
 
-  const regenerateVerifyToken = () => {
-    setSettings(prev => ({
-      ...prev,
-      verifyToken: generateVerifyToken(),
-    }));
-  };
-
   const handleSave = async () => {
     if (!user) return;
+    
+    if (!settings.apiToken || !settings.phoneNumberId) {
+      toast({ 
+        title: 'Missing required fields', 
+        description: 'Please enter API Token and Phone Number ID',
+        variant: 'destructive' 
+      });
+      return;
+    }
+
     setSaving(true);
 
     try {
-      const webhookUrl = settings.webhookUrl || `https://fattyvnmuezlaumtxbva.supabase.co/functions/v1/whatsapp-webhook?user_id=${user.id}`;
-      const verifyToken = settings.verifyToken || generateVerifyToken();
-
       const { error } = await supabase
+        .from('whatsapp_settings' as any)
+        .upsert({
+          user_id: user.id,
+          api_token: settings.apiToken,
+          phone_number_id: settings.phoneNumberId,
+          business_account_id: settings.businessAccountId,
+          webhook_url: settings.webhookUrl,
+          verify_token: settings.verifyToken,
+          is_connected: settings.isConnected,
+        }, {
+          onConflict: 'user_id',
+        });
+
+      if (error) throw error;
+
+      toast({ title: 'Settings saved successfully' });
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast({ title: 'Error saving settings', variant: 'destructive' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleGenerateWebhook = async () => {
+    if (!user) return;
+    if (!settings.apiToken || !settings.phoneNumberId) {
+      toast({ 
+        title: 'Save credentials first', 
+        description: 'Please enter and save your API credentials before generating webhook',
+        variant: 'destructive' 
+      });
+      return;
+    }
+
+    const verifyToken = generateVerifyToken();
+    const webhookUrl = `https://fattyvnmuezlaumtxbva.supabase.co/functions/v1/whatsapp-webhook?user_id=${user.id}`;
+    
+    setSettings(prev => ({
+      ...prev,
+      webhookUrl,
+      verifyToken,
+    }));
+    setWebhookGenerated(true);
+
+    // Save immediately
+    try {
+      await supabase
         .from('whatsapp_settings' as any)
         .upsert({
           user_id: user.id,
@@ -101,24 +146,11 @@ export function WhatsAppApiSettings() {
           webhook_url: webhookUrl,
           verify_token: verifyToken,
           is_connected: settings.isConnected,
-        }, {
-          onConflict: 'user_id',
-        });
+        }, { onConflict: 'user_id' });
 
-      if (error) throw error;
-
-      setSettings(prev => ({
-        ...prev,
-        webhookUrl,
-        verifyToken,
-      }));
-
-      toast({ title: 'Settings saved successfully' });
+      toast({ title: 'Webhook generated! Copy the URL and verify token to Meta.' });
     } catch (error) {
-      console.error('Error saving settings:', error);
-      toast({ title: 'Error saving settings', variant: 'destructive' });
-    } finally {
-      setSaving(false);
+      console.error('Error saving webhook:', error);
     }
   };
 
@@ -147,18 +179,24 @@ export function WhatsAppApiSettings() {
 
       if (data?.success) {
         setSettings(prev => ({ ...prev, isConnected: true }));
+        onConnectionChange?.(true);
         
         // Update database
         await supabase
           .from('whatsapp_settings' as any)
           .upsert({
             user_id: user?.id,
+            api_token: settings.apiToken,
+            phone_number_id: settings.phoneNumberId,
+            business_account_id: settings.businessAccountId,
+            webhook_url: settings.webhookUrl,
+            verify_token: settings.verifyToken,
             is_connected: true,
           }, { onConflict: 'user_id' });
 
         toast({ 
-          title: 'Connection successful', 
-          description: 'WhatsApp Cloud API is connected and working' 
+          title: 'Connection successful!', 
+          description: `Connected to ${data.phoneNumber || 'WhatsApp'}` 
         });
       } else {
         throw new Error(data?.error || 'Connection failed');
@@ -166,6 +204,7 @@ export function WhatsAppApiSettings() {
     } catch (error: any) {
       console.error('Connection test failed:', error);
       setSettings(prev => ({ ...prev, isConnected: false }));
+      onConnectionChange?.(false);
       toast({ 
         title: 'Connection failed', 
         description: error.message || 'Please check your credentials',
@@ -231,16 +270,27 @@ export function WhatsAppApiSettings() {
 
   return (
     <div className="space-y-6">
+      {/* Connection Status Banner */}
+      {settings.isConnected && (
+        <div className="flex items-center gap-3 p-4 bg-lotus-green/10 rounded-lg border border-lotus-green/20">
+          <CheckCircle2 className="h-5 w-5 text-lotus-green" />
+          <div>
+            <p className="font-medium text-lotus-green">Connected to WhatsApp</p>
+            <p className="text-sm text-muted-foreground">Your WhatsApp Business API is active</p>
+          </div>
+        </div>
+      )}
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Key className="h-5 w-5 text-primary" />
-                WhatsApp Cloud API
+                API Credentials
               </CardTitle>
               <CardDescription>
-                Connect your WhatsApp Business Account to send and receive messages
+                Enter your WhatsApp Cloud API credentials from Meta Business Suite
               </CardDescription>
             </div>
             <Badge variant={settings.isConnected ? 'default' : 'secondary'}>
@@ -250,16 +300,16 @@ export function WhatsAppApiSettings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="apiToken">API Token</Label>
+            <Label htmlFor="apiToken">Access Token *</Label>
             <Input
               id="apiToken"
               type="password"
               value={settings.apiToken}
               onChange={(e) => setSettings({ ...settings, apiToken: e.target.value })}
-              placeholder="Enter your WhatsApp Cloud API token"
+              placeholder="Enter your permanent access token"
             />
             <p className="text-xs text-muted-foreground">
-              Get this from Meta Business Suite → WhatsApp → API Setup
+              Get this from Meta Business Suite → WhatsApp → API Setup → Permanent Token
             </p>
           </div>
 
@@ -267,7 +317,7 @@ export function WhatsAppApiSettings() {
             <div className="space-y-2">
               <Label htmlFor="phoneNumberId" className="flex items-center gap-1.5">
                 <Smartphone className="h-3.5 w-3.5" />
-                Phone Number ID
+                Phone Number ID *
               </Label>
               <Input
                 id="phoneNumberId"
@@ -288,7 +338,27 @@ export function WhatsAppApiSettings() {
                 onChange={(e) => setSettings({ ...settings, businessAccountId: e.target.value })}
                 placeholder="987654321098765"
               />
+              <p className="text-xs text-muted-foreground">Required for template sync</p>
             </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3 pt-2">
+            <Button onClick={handleSave} disabled={saving}>
+              {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Save Credentials
+            </Button>
+            <Button 
+              variant="outline" 
+              onClick={handleTestConnection}
+              disabled={testing || !settings.apiToken || !settings.phoneNumberId}
+            >
+              {testing ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <TestTube className="h-4 w-4 mr-2" />
+              )}
+              Test Connection
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -300,96 +370,106 @@ export function WhatsAppApiSettings() {
             Webhook Configuration
           </CardTitle>
           <CardDescription>
-            Submit these values to Meta to receive incoming messages
+            Generate your unique webhook URL to receive messages from WhatsApp
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label>Webhook URL</Label>
-            <div className="flex gap-2">
-              <Input
-                value={settings.webhookUrl}
-                readOnly
-                className="bg-muted"
-              />
+          {!webhookGenerated ? (
+            <div className="text-center py-6">
+              <p className="text-sm text-muted-foreground mb-4">
+                After saving your credentials, generate a webhook URL to receive incoming messages
+              </p>
               <Button 
-                variant="outline" 
-                size="icon"
-                onClick={() => copyToClipboard(settings.webhookUrl, 'Webhook URL')}
+                onClick={handleGenerateWebhook}
+                disabled={!settings.apiToken || !settings.phoneNumberId}
               >
-                <Copy className="h-4 w-4" />
+                <Link className="h-4 w-4 mr-2" />
+                Generate Webhook URL
               </Button>
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label>Callback URL</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={settings.webhookUrl}
+                    readOnly
+                    className="bg-muted font-mono text-xs"
+                  />
+                  <Button 
+                    variant="outline" 
+                    size="icon"
+                    onClick={() => copyToClipboard(settings.webhookUrl, 'Webhook URL')}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
 
-          <div className="space-y-2">
-            <Label>Verify Token</Label>
-            <div className="flex gap-2">
-              <Input
-                value={settings.verifyToken}
-                readOnly
-                className="bg-muted font-mono"
-              />
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={() => copyToClipboard(settings.verifyToken, 'Verify token')}
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
-              <Button 
-                variant="outline" 
-                size="icon"
-                onClick={regenerateVerifyToken}
-              >
-                <RefreshCw className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
+              <div className="space-y-2">
+                <Label>Verify Token</Label>
+                <div className="flex gap-2">
+                  <Input
+                    value={settings.verifyToken}
+                    readOnly
+                    className="bg-muted font-mono text-xs"
+                  />
+                  <Button 
+                    variant="outline" 
+                    size="icon"
+                    onClick={() => copyToClipboard(settings.verifyToken, 'Verify token')}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
 
-          <div className="p-4 bg-muted rounded-lg">
-            <h4 className="font-medium mb-2">Setup Instructions:</h4>
-            <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-              <li>Go to Meta Business Suite → WhatsApp → Configuration</li>
-              <li>Click "Edit" on the Webhook section</li>
-              <li>Paste the Webhook URL and Verify Token above</li>
-              <li>Subscribe to "messages" webhook field</li>
-              <li>Click "Verify and Save"</li>
-            </ol>
-          </div>
+              <Separator className="my-4" />
+
+              <div className="p-4 bg-muted rounded-lg">
+                <h4 className="font-medium mb-2">Setup Instructions:</h4>
+                <ol className="text-sm text-muted-foreground space-y-2 list-decimal list-inside">
+                  <li>Go to <strong>Meta Business Suite → WhatsApp → Configuration</strong></li>
+                  <li>Click <strong>"Edit"</strong> on the Webhook section</li>
+                  <li>Paste the <strong>Callback URL</strong> above</li>
+                  <li>Paste the <strong>Verify Token</strong> above</li>
+                  <li>Subscribe to <strong>"messages"</strong> webhook field</li>
+                  <li>Click <strong>"Verify and Save"</strong></li>
+                </ol>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
 
-      <div className="flex flex-wrap gap-3">
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
-          Save Settings
-        </Button>
-        <Button 
-          variant="outline" 
-          onClick={handleTestConnection}
-          disabled={testing || !settings.apiToken || !settings.phoneNumberId}
-        >
-          {testing ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <TestTube className="h-4 w-4 mr-2" />
+      <Card>
+        <CardHeader>
+          <CardTitle>Message Templates</CardTitle>
+          <CardDescription>
+            Sync your approved WhatsApp message templates
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button 
+            variant="outline" 
+            onClick={handleSyncTemplates}
+            disabled={syncing || !settings.apiToken || !settings.businessAccountId || !settings.isConnected}
+          >
+            {syncing ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Sync Templates
+          </Button>
+          {!settings.isConnected && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Connect your API first to sync templates
+            </p>
           )}
-          Test Connection
-        </Button>
-        <Button 
-          variant="outline" 
-          onClick={handleSyncTemplates}
-          disabled={syncing || !settings.apiToken || !settings.businessAccountId}
-        >
-          {syncing ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4 mr-2" />
-          )}
-          Sync Templates
-        </Button>
-      </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

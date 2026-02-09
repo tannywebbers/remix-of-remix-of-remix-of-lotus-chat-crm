@@ -27,7 +27,7 @@ interface ChatViewProps {
 }
 
 export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
-  const { activeChat, messages, addMessage, setShowContactPanel, updateContact, deleteContact } = useAppStore();
+  const { activeChat, messages, addMessage, setMessages, setShowContactPanel, updateContact } = useAppStore();
   const { user } = useAuth();
   const { toast } = useToast();
   const [inputValue, setInputValue] = useState('');
@@ -377,18 +377,19 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     }
   };
 
+  // FIXED: Delete chat only removes messages, NOT the contact
   const handleChatAction = async (action: 'pin' | 'mute' | 'archive' | 'delete' | 'clear') => {
     if (!activeChat) return;
 
     try {
-      if (action === 'delete') {
-        await supabase.from('contacts').delete().eq('id', activeChat.id);
-        deleteContact(activeChat.id);
-        toast({ title: 'Chat deleted' });
-        onBack?.();
-      } else if (action === 'clear') {
+      if (action === 'delete' || action === 'clear') {
+        // Delete only messages, preserve contact
         await supabase.from('messages').delete().eq('contact_id', activeChat.id);
-        toast({ title: 'Messages cleared' });
+        setMessages(activeChat.id, []);
+        toast({ title: action === 'delete' ? 'Chat deleted' : 'Messages cleared', description: 'Contact preserved' });
+        if (action === 'delete') {
+          onBack?.();
+        }
       } else {
         const field = action === 'pin' ? 'is_pinned' : action === 'mute' ? 'is_muted' : 'is_archived';
         const currentValue = action === 'pin' ? activeChat.isPinned : action === 'mute' ? activeChat.isMuted : false;
