@@ -8,7 +8,14 @@ import { MobileLayout } from '@/components/layout/MobileLayout';
 const Index = () => {
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const { loadData, loading } = useAppStore();
+  const { loadData, loading, contacts } = useAppStore();
+
+  // Apply persisted theme on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('app_theme') || 'light';
+    const isDark = saved === 'dark' || (saved === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.classList.toggle('dark', isDark);
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -16,7 +23,8 @@ const Index = () => {
     }
   }, [user, loadData]);
 
-  if (loading) {
+  // Show loading only if no cached data
+  if (loading && contacts.length === 0) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
