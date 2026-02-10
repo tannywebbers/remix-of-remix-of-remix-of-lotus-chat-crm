@@ -5,6 +5,7 @@ import { ChatList } from '@/components/chat/ChatList';
 import { ChatView } from '@/components/chat/ChatView';
 import { ContactPanel } from '@/components/contacts/ContactPanel';
 import { AddContactModal } from '@/components/contacts/AddContactModal';
+import { EditContactModal } from '@/components/contacts/EditContactModal';
 import { SettingsPage } from '@/components/settings/SettingsPage';
 import { NewChatModal } from '@/components/chat/NewChatModal';
 import { Button } from '@/components/ui/button';
@@ -18,9 +19,10 @@ const navItems: { mode: ViewMode; label: string; imgSrc?: string }[] = [
 ];
 
 export function MobileLayout() {
-  const { viewMode, setViewMode, activeChat, setActiveChat, showContactPanel, setShowContactPanel, chats } = useAppStore();
+  const { viewMode, setViewMode, activeChat, setActiveChat, showContactPanel, setShowContactPanel, chats, editContactId, setEditContactId } = useAppStore();
   const [showChatView, setShowChatView] = useState(false);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const totalUnread = useAppStore.getState().totalUnread();
 
   const handleOpenChat = (chat: any) => {
     setActiveChat(chat);
@@ -51,7 +53,9 @@ export function MobileLayout() {
         <div className="flex-1 overflow-y-auto">
           <ContactPanel />
         </div>
-        <AddContactModal />
+        {editContactId && (
+          <EditContactModal open={!!editContactId} onOpenChange={(open) => { if (!open) setEditContactId(null); }} contactId={editContactId} />
+        )}
       </div>
     );
   }
@@ -61,39 +65,34 @@ export function MobileLayout() {
     return (
       <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
         <ChatView onBack={handleBackFromChat} showBackButton={true} />
-        <AddContactModal />
+        {editContactId && (
+          <EditContactModal open={!!editContactId} onOpenChange={(open) => { if (!open) setEditContactId(null); }} contactId={editContactId} />
+        )}
       </div>
     );
   }
 
-  // Main tabbed layout — tabs always visible
+  // Main tabbed layout
   return (
     <div className="h-[100dvh] flex flex-col bg-background">
-      {/* Content */}
       <div className="flex-1 overflow-hidden flex flex-col min-h-0">
         {viewMode === 'chats' && (
-          <ChatList 
-            onChatSelect={handleOpenChat} 
-            onNewChat={() => setShowNewChatModal(true)}
-          />
+          <ChatList onChatSelect={handleOpenChat} onNewChat={() => setShowNewChatModal(true)} />
         )}
         {viewMode === 'contacts' && (
-          <ChatList 
-            onChatSelect={handleOpenChat} 
-            onNewChat={() => setShowNewChatModal(true)}
-          />
+          <ChatList onChatSelect={handleOpenChat} onNewChat={() => setShowNewChatModal(true)} />
         )}
         {viewMode === 'settings' && <SettingsPage />}
       </div>
 
-      {/* Bottom Tab Bar - iOS Style */}
+      {/* Bottom Tab Bar */}
       <nav className="flex items-center justify-around bg-panel-header/95 backdrop-blur-lg border-t border-panel-border shrink-0 pb-safe">
         {navItems.map(({ mode, label, imgSrc }) => (
           <button
             key={mode}
             onClick={() => setViewMode(mode)}
             className={cn(
-              'flex flex-col items-center gap-0.5 px-6 py-2 min-w-[72px] transition-colors',
+              'relative flex flex-col items-center gap-0.5 px-6 py-2 min-w-[72px] transition-colors',
               viewMode === mode ? 'text-primary' : 'text-muted-foreground'
             )}
           >
@@ -109,11 +108,19 @@ export function MobileLayout() {
               </svg>
             )}
             <span className="text-[10px] font-semibold">{label}</span>
+            {mode === 'chats' && totalUnread > 0 && (
+              <span className="absolute top-0.5 right-3 flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
+                {totalUnread > 99 ? '99+' : totalUnread}
+              </span>
+            )}
           </button>
         ))}
       </nav>
 
       <AddContactModal />
+      {editContactId && (
+        <EditContactModal open={!!editContactId} onOpenChange={(open) => { if (!open) setEditContactId(null); }} contactId={editContactId} />
+      )}
       <NewChatModal 
         open={showNewChatModal} 
         onClose={() => setShowNewChatModal(false)}

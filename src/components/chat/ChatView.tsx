@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, MoreVertical, Phone, Video, Info, ArrowLeft, Trash2, Pin, BellOff, Archive, X, MessageCircle, AlertTriangle } from 'lucide-react';
+import { Send, MoreVertical, Phone, Video, Info, ArrowLeft, Trash2, Pin, BellOff, Archive, X, MessageCircle, AlertTriangle, Star } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -23,7 +23,7 @@ interface ChatViewProps {
 }
 
 export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
-  const { activeChat, messages, addMessage, setMessages, setShowContactPanel, updateContact, setDraft, updateMessageStatus } = useAppStore();
+  const { activeChat, messages, addMessage, setMessages, setShowContactPanel, updateContact, setDraft, updateMessageStatus, favorites, toggleFavorite } = useAppStore();
   const { user } = useAuth();
   const { toast } = useToast();
   const draft = activeChat ? useAppStore.getState().drafts?.[activeChat.id] || '' : '';
@@ -35,17 +35,23 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const inputRef = useRef<HTMLInputElement>(null);
 
   const chatMessages = activeChat ? messages[activeChat.id] || [] : [];
-
-  // Check if this is a business-initiated conversation with no customer reply
   const hasCustomerReply = chatMessages.some(m => !m.isOutgoing);
   const hasAnyMessages = chatMessages.length > 0;
   const showBusinessNotice = hasAnyMessages && !hasCustomerReply;
+  const isFav = activeChat ? useAppStore.getState().favorites[activeChat.id] : false;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
-  // Real-time listener for new messages AND status updates
+  // Sync draft when switching chats
+  useEffect(() => {
+    if (activeChat) {
+      setInputValue(useAppStore.getState().drafts?.[activeChat.id] || '');
+    }
+  }, [activeChat?.id]);
+
+  // Real-time listener
   useEffect(() => {
     if (!activeChat || !user) return;
 
@@ -62,7 +68,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           timestamp: new Date(m.created_at), mediaUrl: m.media_url,
           whatsappMessageId: m.whatsapp_message_id,
         };
-        const existing = messages[activeChat.id] || [];
+        const existing = useAppStore.getState().messages[activeChat.id] || [];
         if (!existing.find(msg => msg.id === newMessage.id)) {
           addMessage(activeChat.id, newMessage);
         }
@@ -232,12 +238,13 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         if (action === 'delete') onBack?.();
       } else {
         const field = action === 'pin' ? 'is_pinned' : action === 'mute' ? 'is_muted' : 'is_archived';
-        const currentValue = action === 'pin' ? activeChat.isPinned : action === 'mute' ? activeChat.isMuted : false;
+        const currentValue = action === 'pin' ? activeChat.isPinned : action === 'mute' ? activeChat.isMuted : activeChat.isArchived;
         await supabase.from('contacts').update({ [field]: !currentValue }).eq('id', activeChat.id);
         updateContact(activeChat.id, {
           [action === 'pin' ? 'isPinned' : action === 'mute' ? 'isMuted' : 'isArchived']: !currentValue,
         } as any);
-        toast({ title: `Chat ${action}${action === 'pin' ? 'ned' : 'd'}` });
+        toast({ title: `Chat ${action === 'archive' ? (currentValue ? 'unarchived' : 'archived') : action + (action === 'pin' ? 'ned' : 'd')}` });
+        if (action === 'archive' && !currentValue) onBack?.();
       }
     } catch { toast({ title: `Failed to ${action} chat`, variant: 'destructive' }); }
   };
@@ -294,9 +301,13 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuItem onClick={() => setShowContactPanel(true)}><Info className="h-4 w-4 mr-3" /> Contact info</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => toggleFavorite(activeChat.id)}>
+                <Star className={`h-4 w-4 mr-3 ${isFav ? 'fill-amber-500 text-amber-500' : ''}`} />
+                {isFav ? 'Remove favorite' : 'Add to favorites'}
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleChatAction('pin')}><Pin className="h-4 w-4 mr-3" /> {activeChat.isPinned ? 'Unpin' : 'Pin'} chat</DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleChatAction('mute')}><BellOff className="h-4 w-4 mr-3" /> {activeChat.isMuted ? 'Unmute' : 'Mute'}</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleChatAction('archive')}><Archive className="h-4 w-4 mr-3" /> Archive</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleChatAction('archive')}><Archive className="h-4 w-4 mr-3" /> {activeChat.isArchived ? 'Unarchive' : 'Archive'}</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => handleChatAction('clear')} className="text-destructive"><X className="h-4 w-4 mr-3" /> Clear messages</DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleChatAction('delete')} className="text-destructive"><Trash2 className="h-4 w-4 mr-3" /> Delete chat</DropdownMenuItem>
