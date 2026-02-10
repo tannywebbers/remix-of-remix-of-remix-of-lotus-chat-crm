@@ -17,13 +17,13 @@ serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   );
 
-  // Handle webhook verification (GET from Meta)
+  // Webhook verification (GET)
   if (req.method === 'GET') {
     const mode = url.searchParams.get('hub.mode');
     const token = url.searchParams.get('hub.verify_token');
     const challenge = url.searchParams.get('hub.challenge');
 
-    console.log('Verification request:', { mode, token, challenge, userId });
+    console.log('Verification:', { mode, token, challenge, userId });
 
     if (mode === 'subscribe' && userId) {
       const { data: settings } = await supabase
@@ -33,22 +33,20 @@ serve(async (req) => {
         .single();
 
       if (settings && settings.verify_token === token) {
-        console.log('Webhook verified successfully');
-        // Mark as connected
+        console.log('Webhook verified');
         await supabase.from('whatsapp_settings').update({ is_connected: true }).eq('user_id', userId);
         return new Response(challenge, { status: 200 });
       }
     }
 
-    console.log('Webhook verification failed');
     return new Response('Forbidden', { status: 403 });
   }
 
-  // Handle incoming messages (POST from Meta)
+  // Incoming messages & status updates (POST)
   if (req.method === 'POST') {
     try {
       const body = await req.json();
-      console.log('Incoming webhook:', JSON.stringify(body, null, 2));
+      console.log('Webhook payload:', JSON.stringify(body).substring(0, 500));
 
       const entry = body.entry?.[0];
       const changes = entry?.changes?.[0];
@@ -59,29 +57,26 @@ serve(async (req) => {
       }
 
       // Handle incoming messages
-      if (value.messages && value.messages.length > 0) {
+      if (value.messages?.length > 0) {
         for (const message of value.messages) {
           const from = message.from;
           const messageId = message.id;
           const timestamp = new Date(parseInt(message.timestamp) * 1000);
-          
+
           let content = '';
           let type = 'text';
           let mediaUrl = null;
 
-          if (message.type === 'text') {
-            content = message.text?.body || '';
-          } else if (message.type === 'image') {
-            type = 'image'; content = '[Image]'; mediaUrl = message.image?.id;
-          } else if (message.type === 'document') {
-            type = 'document'; content = message.document?.filename || '[Document]'; mediaUrl = message.document?.id;
-          } else if (message.type === 'audio') {
-            type = 'audio'; content = '[Voice Message]'; mediaUrl = message.audio?.id;
-          } else if (message.type === 'video') {
-            type = 'video'; content = '[Video]'; mediaUrl = message.video?.id;
+          switch (message.type) {
+            case 'text': content = message.text?.body || ''; break;
+            case 'image': type = 'image'; content = message.image?.caption || '[Image]'; mediaUrl = message.image?.id; break;
+            case 'document': type = 'document'; content = message.document?.filename || '[Document]'; mediaUrl = message.document?.id; break;
+            case 'audio': type = 'audio'; content = '[Voice Message]'; mediaUrl = message.audio?.id; break;
+            case 'video': type = 'video'; content = '[Video]'; mediaUrl = message.video?.id; break;
+            default: content = `[${message.type}]`; break;
           }
 
-          // Find contacts by phone number
+          // Find all contacts with this phone number
           const { data: contacts } = await supabase
             .from('contacts')
             .select('id, user_id')
@@ -94,11 +89,11 @@ serve(async (req) => {
                 content, type, status: 'delivered', is_outgoing: false,
                 media_url: mediaUrl, whatsapp_message_id: messageId,
               });
-              if (error) console.error('Error inserting message:', error);
+              if (error) console.error('Insert message error:', error);
               else console.log('Message inserted for contact:', contact.id);
 
-              await supabase.from('contacts').update({ 
-                last_seen: timestamp.toISOString(), is_online: true 
+              await supabase.from('contacts').update({
+                last_seen: timestamp.toISOString(), is_online: true,
               }).eq('id', contact.id);
             }
           } else {
@@ -107,12 +102,21 @@ serve(async (req) => {
         }
       }
 
-      // Handle message status updates
-      if (value.statuses && value.statuses.length > 0) {
+      // Handle status updates (sent, delivered, read, failed)
+      if (value.statuses?.length > 0) {
         for (const status of value.statuses) {
-          const newStatus = status.status;
-          console.log('Status update:', status.id, newStatus);
-          await supabase.from('messages').update({ status: newStatus }).eq('whatsapp_message_id', status.id);
+          const waMessageId = status.id;
+          const newStatus = status.status; // sent, delivered, read, failed
+          console.log('Status update:', waMessageId, '->', newStatus);
+
+          // Update message status by whatsapp_message_id
+          const { error } = await supabase
+            .from('messages')
+            .update({ status: newStatus })
+            .eq('whatsapp_message_id', waMessageId);
+
+          if (error) console.error('Status update error:', error);
+          else console.log('Status updated:', waMessageId, newStatus);
         }
       }
 

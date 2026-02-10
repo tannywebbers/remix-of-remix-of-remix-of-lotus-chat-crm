@@ -1,6 +1,7 @@
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import { Paperclip, Image, FileText, Camera } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { FilePreviewModal } from '@/components/chat/FilePreviewModal';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,37 +11,41 @@ import {
 
 interface FileUploadButtonProps {
   onFileSelect: (file: File, type: 'image' | 'document') => void;
+  uploading?: boolean;
 }
 
-export function FileUploadButton({ onFileSelect }: FileUploadButtonProps) {
+export function FileUploadButton({ onFileSelect, uploading }: FileUploadButtonProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingType, setPendingType] = useState<'image' | 'document'>('image');
+  const [showPreview, setShowPreview] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'document') => {
     const file = e.target.files?.[0];
     if (file) {
-      onFileSelect(file, type);
+      setPendingFile(file);
+      setPendingType(type);
+      setShowPreview(true);
       e.target.value = '';
+    }
+  };
+
+  const handleSend = () => {
+    if (pendingFile) {
+      onFileSelect(pendingFile, pendingType);
+      setShowPreview(false);
+      setPendingFile(null);
     }
   };
 
   return (
     <>
-      <input
-        ref={imageInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => handleFileChange(e, 'image')}
-      />
-      <input
-        ref={documentInputRef}
-        type="file"
-        accept=".pdf,.doc,.docx,.xls,.xlsx,.txt"
-        className="hidden"
-        onChange={(e) => handleFileChange(e, 'document')}
-      />
-      
+      <input ref={imageInputRef} type="file" accept="image/*,video/*" className="hidden" onChange={(e) => handleFileChange(e, 'image')} />
+      <input ref={documentInputRef} type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" className="hidden" onChange={(e) => handleFileChange(e, 'document')} />
+      <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleFileChange(e, 'image')} />
+
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0">
@@ -56,12 +61,21 @@ export function FileUploadButton({ onFileSelect }: FileUploadButtonProps) {
             <FileText className="h-4 w-4 mr-2 text-purple-500" />
             Document
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => imageInputRef.current?.click()}>
+          <DropdownMenuItem onClick={() => cameraInputRef.current?.click()}>
             <Camera className="h-4 w-4 mr-2 text-pink-500" />
             Camera
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <FilePreviewModal
+        open={showPreview}
+        onOpenChange={setShowPreview}
+        file={pendingFile}
+        type={pendingType}
+        onSend={handleSend}
+        sending={uploading}
+      />
     </>
   );
 }
