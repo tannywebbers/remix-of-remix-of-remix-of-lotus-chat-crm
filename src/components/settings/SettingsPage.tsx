@@ -1,31 +1,34 @@
-import { Key, Palette, User, Bell, ChevronRight, ArrowLeft, Building2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
+import { ChevronRight, ArrowLeft, BarChart3 } from 'lucide-react';
 import { WhatsAppApiSettings } from '@/components/settings/WhatsAppApiSettings';
 import { ThemeSettings } from '@/components/settings/ThemeSettings';
 import { AccountSettings } from '@/components/settings/AccountSettings';
 import { NotificationSettings } from '@/components/settings/NotificationSettings';
 import { WhatsAppBusinessProfile } from '@/components/settings/WhatsAppBusinessProfile';
+import { ApiStatsPage } from '@/components/settings/ApiStatsPage';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
-type SettingsTab = 'api' | 'theme' | 'account' | 'notifications' | 'business';
+type SettingsTab = 'api' | 'theme' | 'account' | 'notifications' | 'business' | 'stats';
 
 interface SettingsItem {
   id: SettingsTab;
   label: string;
-  icon: typeof Key;
   description: string;
+  iconSrc?: string;
+  iconBg: string;
   showBadge?: boolean;
 }
 
 const settingsTabs: SettingsItem[] = [
-  { id: 'business', label: 'Business Profile', icon: Building2, description: 'WhatsApp Business info' },
-  { id: 'api', label: 'WhatsApp API', icon: Key, description: 'Configure Cloud API', showBadge: true },
-  { id: 'notifications', label: 'Notifications', icon: Bell, description: 'Message alerts and sounds' },
-  { id: 'theme', label: 'Appearance', icon: Palette, description: 'Theme and colors' },
-  { id: 'account', label: 'Account', icon: User, description: 'Profile and security' },
+  { id: 'business', label: 'Business Profile', description: 'WhatsApp Business info', iconSrc: '/icons/business-profile.png', iconBg: 'bg-[hsl(168,100%,18%)]' },
+  { id: 'api', label: 'WhatsApp API', description: 'Configure Cloud API', iconSrc: '/icons/webhook.png', iconBg: 'bg-[hsl(145,63%,49%)]', showBadge: true },
+  { id: 'stats', label: 'API Stats', description: 'Message analytics & usage', iconBg: 'bg-[hsl(199,89%,48%)]' },
+  { id: 'notifications', label: 'Notifications', description: 'Message alerts and sounds', iconBg: 'bg-[hsl(0,84%,60%)]' },
+  { id: 'theme', label: 'Appearance', description: 'Theme and colors', iconSrc: '/icons/appearance.png', iconBg: 'bg-[hsl(262,83%,58%)]' },
+  { id: 'account', label: 'Account', description: 'Profile and security', iconBg: 'bg-[hsl(199,89%,48%)]' },
 ];
 
 export function SettingsPage() {
@@ -49,12 +52,10 @@ export function SettingsPage() {
     } catch {}
   };
 
-  // Show settings sub-page with back nav
   if (activeTab) {
     const currentTab = settingsTabs.find(t => t.id === activeTab);
     return (
       <div className="flex flex-col h-full bg-background">
-        {/* Sub-page header */}
         <div className="flex items-center gap-1 px-2 pt-2 pb-1 bg-panel shrink-0">
           <Button variant="ghost" size="icon" onClick={() => setActiveTab(null)} className="h-9 w-9 text-primary">
             <ArrowLeft className="h-6 w-6" />
@@ -65,6 +66,7 @@ export function SettingsPage() {
           <div className="p-4">
             {activeTab === 'business' && <WhatsAppBusinessProfile />}
             {activeTab === 'api' && <WhatsAppApiSettings onConnectionChange={setIsConnected} />}
+            {activeTab === 'stats' && <ApiStatsPage />}
             {activeTab === 'notifications' && <NotificationSettings />}
             {activeTab === 'theme' && <ThemeSettings />}
             {activeTab === 'account' && <AccountSettings />}
@@ -74,26 +76,35 @@ export function SettingsPage() {
     );
   }
 
-  // Settings list - scrollable, no extra header since MobileLayout shows "Settings" via ChatList
   return (
     <div className="flex flex-col h-full bg-background">
-      {/* Title for settings list */}
       <div className="px-4 pt-3 pb-1 bg-panel shrink-0">
         <h1 className="text-[34px] font-bold tracking-tight text-foreground">Settings</h1>
       </div>
 
       <div className="flex-1 overflow-y-auto custom-scrollbar">
-        <div className="bg-card mt-2">
-          {settingsTabs.map(({ id, label, icon: Icon, description, showBadge }, index) => (
+        <div className="bg-card mt-2 rounded-xl mx-3 overflow-hidden">
+          {settingsTabs.map(({ id, label, description, iconSrc, iconBg, showBadge }, index) => (
             <button
               key={id}
               onClick={() => setActiveTab(id)}
-              className="w-full flex items-center gap-4 px-4 py-[14px] hover:bg-accent/50 transition-colors active:bg-accent/70"
+              className="ios-settings-row"
             >
-              <div className="h-[38px] w-[38px] rounded-[10px] bg-primary/10 flex items-center justify-center shrink-0">
-                <Icon className="h-[20px] w-[20px] text-primary" />
+              <div className={`ios-settings-icon ${iconBg}`}>
+                {iconSrc ? (
+                  <img src={iconSrc} alt={label} className="h-[18px] w-[18px] object-contain brightness-0 invert" />
+                ) : id === 'stats' ? (
+                  <BarChart3 className="h-[18px] w-[18px] text-white" />
+                ) : id === 'notifications' ? (
+                  <svg className="h-[18px] w-[18px] text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                ) : id === 'account' ? (
+                  <svg className="h-[18px] w-[18px] text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                ) : null}
               </div>
-              <div className="flex-1 text-left min-w-0 border-b border-panel-border pb-[14px]">
+              <div className={cn(
+                "flex-1 text-left min-w-0",
+                index < settingsTabs.length - 1 && "border-b border-panel-border pb-[13px]"
+              )}>
                 <div className="flex items-center gap-2">
                   <p className="text-[17px] font-medium">{label}</p>
                   {showBadge && (
@@ -114,4 +125,8 @@ export function SettingsPage() {
       </div>
     </div>
   );
+}
+
+function cn(...classes: (string | boolean | undefined)[]) {
+  return classes.filter(Boolean).join(' ');
 }

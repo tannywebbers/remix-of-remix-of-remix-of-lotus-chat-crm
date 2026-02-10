@@ -1,21 +1,107 @@
+import { useState } from 'react';
+import { MessageCircle, Users, Settings, SquarePen, Search, UserPlus, Menu, X, BarChart3 } from 'lucide-react';
 import { ChatList } from '@/components/chat/ChatList';
 import { ChatView } from '@/components/chat/ChatView';
 import { ContactPanel } from '@/components/contacts/ContactPanel';
 import { AddContactModal } from '@/components/contacts/AddContactModal';
 import { SettingsPage } from '@/components/settings/SettingsPage';
+import { NewChatModal } from '@/components/chat/NewChatModal';
 import { useAppStore } from '@/store/appStore';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { ViewMode } from '@/types';
+
+const sidebarItems: { mode: ViewMode; icon: typeof MessageCircle; label: string; imgSrc?: string }[] = [
+  { mode: 'chats', icon: MessageCircle, label: 'Chats', imgSrc: '/icons/chats.png' },
+  { mode: 'contacts', icon: Users, label: 'Contacts', imgSrc: '/icons/contacts.png' },
+  { mode: 'settings', icon: Settings, label: 'Settings' },
+];
 
 export function DesktopLayout() {
-  const { showContactPanel, activeChat, viewMode } = useAppStore();
+  const { showContactPanel, activeChat, viewMode, setViewMode, setShowAddContactModal } = useAppStore();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [showNewChatModal, setShowNewChatModal] = useState(false);
 
   return (
     <div className="h-screen flex overflow-hidden bg-background">
-      {/* Sidebar - always shows ChatList/Contacts/Settings based on viewMode */}
+      {/* Sidebar Navigation */}
+      <div className={cn(
+        "flex flex-col bg-panel-header border-r border-panel-border shrink-0 transition-all duration-300",
+        sidebarOpen ? "w-[68px]" : "w-0 overflow-hidden"
+      )}>
+        {/* Hamburger */}
+        <div className="flex items-center justify-center py-4">
+          <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="h-10 w-10">
+            <Menu className="h-5 w-5 text-muted-foreground" />
+          </Button>
+        </div>
+
+        {/* Nav Items */}
+        <nav className="flex-1 flex flex-col items-center gap-1 pt-2">
+          {sidebarItems.map(({ mode, icon: Icon, label, imgSrc }) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={cn(
+                'flex flex-col items-center gap-0.5 w-14 py-2 rounded-xl transition-all',
+                viewMode === mode
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted-foreground hover:bg-accent'
+              )}
+              title={label}
+            >
+              {imgSrc ? (
+                <img src={imgSrc} alt={label} className={cn(
+                  "h-6 w-6 object-contain",
+                  viewMode === mode ? "opacity-100" : "opacity-60"
+                )} />
+              ) : (
+                <Icon className={cn("h-6 w-6", viewMode === mode && "stroke-[2.5px]")} />
+              )}
+              <span className="text-[10px] font-semibold">{label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {/* Quick Actions */}
+        <div className="flex flex-col items-center gap-2 py-4">
+          <Button
+            variant="ghost" size="icon"
+            className="h-10 w-10 text-muted-foreground hover:text-primary"
+            onClick={() => setShowNewChatModal(true)}
+            title="New Chat"
+          >
+            <SquarePen className="h-5 w-5" />
+          </Button>
+          <Button
+            variant="ghost" size="icon"
+            className="h-10 w-10 text-muted-foreground hover:text-primary"
+            onClick={() => setShowAddContactModal(true)}
+            title="Add Contact"
+          >
+            <UserPlus className="h-5 w-5" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Toggle sidebar when collapsed */}
+      {!sidebarOpen && (
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="absolute top-3 left-3 z-50 h-9 w-9 flex items-center justify-center rounded-lg bg-panel-header border border-panel-border hover:bg-accent transition-colors"
+        >
+          <Menu className="h-5 w-5 text-muted-foreground" />
+        </button>
+      )}
+
+      {/* Main Panel - ChatList / Contacts / Settings */}
       <div className="w-[380px] lg:w-[420px] shrink-0 flex flex-col border-r border-panel-border">
         {viewMode === 'settings' ? (
           <SettingsPage />
         ) : (
-          <ChatList />
+          <ChatList 
+            onNewChat={() => setShowNewChatModal(true)}
+          />
         )}
       </div>
 
@@ -28,6 +114,15 @@ export function DesktopLayout() {
       {activeChat && showContactPanel && <ContactPanel />}
 
       <AddContactModal />
+      <NewChatModal 
+        open={showNewChatModal}
+        onClose={() => setShowNewChatModal(false)}
+        onSelectContact={(contact) => {
+          const chat = useAppStore.getState().chats.find(c => c.contact.id === contact.id);
+          if (chat) useAppStore.getState().setActiveChat(chat);
+          setShowNewChatModal(false);
+        }}
+      />
     </div>
   );
 }

@@ -27,10 +27,11 @@ interface ChatViewProps {
 }
 
 export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
-  const { activeChat, messages, addMessage, setMessages, setShowContactPanel, updateContact } = useAppStore();
+  const { activeChat, messages, addMessage, setMessages, setShowContactPanel, updateContact, setDraft } = useAppStore();
   const { user } = useAuth();
   const { toast } = useToast();
-  const [inputValue, setInputValue] = useState('');
+  const draft = activeChat ? useAppStore.getState().drafts?.[activeChat.id] || '' : '';
+  const [inputValue, setInputValue] = useState(draft);
   const [sending, setSending] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -326,7 +327,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                 <Input
                   ref={inputRef}
                   value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
+                  onChange={(e) => { setInputValue(e.target.value); if (activeChat) setDraft(activeChat.id, e.target.value); }}
                   onKeyDown={handleKeyDown}
                   placeholder="Message"
                   className="flex-1 border-0 focus-visible:ring-0 h-[38px] px-0 text-[16px] bg-transparent"

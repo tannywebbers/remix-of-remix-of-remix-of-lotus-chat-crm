@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MessageCircle, Users, Settings, ArrowLeft, Plus } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { ChatList } from '@/components/chat/ChatList';
 import { ChatView } from '@/components/chat/ChatView';
@@ -11,10 +11,10 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { ViewMode } from '@/types';
 
-const navItems: { mode: ViewMode; icon: typeof MessageCircle; label: string }[] = [
-  { mode: 'chats', icon: MessageCircle, label: 'Chats' },
-  { mode: 'contacts', icon: Users, label: 'Contacts' },
-  { mode: 'settings', icon: Settings, label: 'Settings' },
+const navItems: { mode: ViewMode; label: string; imgSrc?: string }[] = [
+  { mode: 'chats', label: 'Chats', imgSrc: '/icons/chats.png' },
+  { mode: 'contacts', label: 'Contacts', imgSrc: '/icons/contacts.png' },
+  { mode: 'settings', label: 'Settings' },
 ];
 
 export function MobileLayout() {
@@ -34,13 +34,11 @@ export function MobileLayout() {
 
   const handleNewChatSelect = (contact: any) => {
     const chat = chats.find(c => c.contact.id === contact.id);
-    if (chat) {
-      handleOpenChat(chat);
-    }
+    if (chat) handleOpenChat(chat);
     setShowNewChatModal(false);
   };
 
-  // Show contact panel as full screen
+  // Contact panel full screen
   if (showContactPanel && activeChat) {
     return (
       <div className="h-[100dvh] flex flex-col bg-background">
@@ -58,7 +56,7 @@ export function MobileLayout() {
     );
   }
 
-  // Full screen chat view when a chat is selected
+  // Full screen chat view
   if (showChatView && activeChat) {
     return (
       <div className="h-[100dvh] flex flex-col bg-background overflow-hidden">
@@ -71,7 +69,7 @@ export function MobileLayout() {
   // Main tabbed layout — tabs always visible
   return (
     <div className="h-[100dvh] flex flex-col bg-background">
-      {/* Main Content Area */}
+      {/* Content */}
       <div className="flex-1 overflow-hidden flex flex-col min-h-0">
         {viewMode === 'chats' && (
           <ChatList 
@@ -85,26 +83,32 @@ export function MobileLayout() {
             onNewChat={() => setShowNewChatModal(true)}
           />
         )}
-        {viewMode === 'settings' && (
-          <SettingsPage />
-        )}
+        {viewMode === 'settings' && <SettingsPage />}
       </div>
 
-      {/* Bottom Tab Bar - iOS Style - ALWAYS VISIBLE */}
+      {/* Bottom Tab Bar - iOS Style */}
       <nav className="flex items-center justify-around bg-panel-header/95 backdrop-blur-lg border-t border-panel-border shrink-0 pb-safe">
-        {navItems.map(({ mode, icon: Icon, label }) => (
+        {navItems.map(({ mode, label, imgSrc }) => (
           <button
             key={mode}
             onClick={() => setViewMode(mode)}
             className={cn(
               'flex flex-col items-center gap-0.5 px-6 py-2 min-w-[72px] transition-colors',
-              viewMode === mode 
-                ? 'text-primary' 
-                : 'text-muted-foreground'
+              viewMode === mode ? 'text-primary' : 'text-muted-foreground'
             )}
           >
-            <Icon className={cn("h-[26px] w-[26px]", viewMode === mode && "stroke-[2.5px]")} />
-            <span className="text-[10px] font-medium">{label}</span>
+            {imgSrc ? (
+              <img src={imgSrc} alt={label} className={cn(
+                "h-[26px] w-[26px] object-contain",
+                viewMode === mode ? "opacity-100" : "opacity-50"
+              )} />
+            ) : (
+              <svg className={cn("h-[26px] w-[26px]", viewMode === mode && "stroke-[2.5px]")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3" />
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
+              </svg>
+            )}
+            <span className="text-[10px] font-semibold">{label}</span>
           </button>
         ))}
       </nav>
