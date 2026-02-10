@@ -27,6 +27,16 @@ interface AppState {
   drafts: Record<string, string>;
   setDraft: (contactId: string, text: string) => void;
 
+  // Unread counters
+  unreadCounts: Record<string, number>;
+  incrementUnread: (contactId: string) => void;
+  clearUnread: (contactId: string) => void;
+  totalUnread: () => number;
+
+  // Favorites
+  favorites: Record<string, boolean>;
+  toggleFavorite: (contactId: string) => void;
+
   loading: boolean;
   setLoading: (loading: boolean) => void;
   loadData: (userId: string) => Promise<void>;
@@ -39,6 +49,10 @@ interface AppState {
 
   searchQuery: string;
   setSearchQuery: (query: string) => void;
+
+  // Edit contact modal
+  editContactId: string | null;
+  setEditContactId: (id: string | null) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -64,10 +78,10 @@ export const useAppStore = create<AppState>()(
       updateContact: (id, updates) => set((state) => ({
         contacts: state.contacts.map(c => c.id === id ? { ...c, ...updates, updatedAt: new Date() } : c),
         chats: state.chats.map(chat =>
-          chat.contact.id === id ? { ...chat, contact: { ...chat.contact, ...updates, updatedAt: new Date() } } : chat
+          chat.contact.id === id ? { ...chat, contact: { ...chat.contact, ...updates, updatedAt: new Date() }, ...(updates.isPinned !== undefined ? { isPinned: updates.isPinned } : {}), ...(updates.isMuted !== undefined ? { isMuted: updates.isMuted } : {}), ...(updates.isArchived !== undefined ? { isArchived: updates.isArchived } : {}) } : chat
         ),
         activeChat: state.activeChat?.id === id
-          ? { ...state.activeChat, contact: { ...state.activeChat.contact, ...updates, updatedAt: new Date() } }
+          ? { ...state.activeChat, contact: { ...state.activeChat.contact, ...updates, updatedAt: new Date() }, ...(updates.isPinned !== undefined ? { isPinned: updates.isPinned } : {}), ...(updates.isMuted !== undefined ? { isMuted: updates.isMuted } : {}), ...(updates.isArchived !== undefined ? { isArchived: updates.isArchived } : {}) }
           : state.activeChat,
       })),
       deleteContact: (id) => set((state) => ({
@@ -79,21 +93,37 @@ export const useAppStore = create<AppState>()(
       chats: [],
       setChats: (chats) => set({ chats }),
       activeChat: null,
-      setActiveChat: (chat) => set({ activeChat: chat, showContactPanel: false }),
+      setActiveChat: (chat) => {
+        set({ activeChat: chat, showContactPanel: false });
+        if (chat) {
+          // Clear unread when opening chat
+          set((state) => ({
+            unreadCounts: { ...state.unreadCounts, [chat.id]: 0 },
+            chats: state.chats.map(c => c.id === chat.id ? { ...c, unreadCount: 0 } : c),
+          }));
+        }
+      },
 
       messages: {},
       setMessages: (contactId, messages) => set((state) => ({
         messages: { ...state.messages, [contactId]: messages },
       })),
-      addMessage: (contactId, message) => set((state) => ({
-        messages: {
-          ...state.messages,
-          [contactId]: [...(state.messages[contactId] || []), message],
-        },
-        chats: state.chats.map(chat =>
-          chat.id === contactId ? { ...chat, lastMessage: message } : chat
-        ),
-      })),
+      addMessage: (contactId, message) => set((state) => {
+        const isCurrentChat = state.activeChat?.id === contactId;
+        const newUnread = !message.isOutgoing && !isCurrentChat
+          ? (state.unreadCounts[contactId] || 0) + 1
+          : state.unreadCounts[contactId] || 0;
+        return {
+          messages: {
+            ...state.messages,
+            [contactId]: [...(state.messages[contactId] || []), message],
+          },
+          chats: state.chats.map(chat =>
+            chat.id === contactId ? { ...chat, lastMessage: message, unreadCount: isCurrentChat ? 0 : newUnread } : chat
+          ),
+          unreadCounts: { ...state.unreadCounts, [contactId]: isCurrentChat ? 0 : newUnread },
+        };
+      }),
       updateMessageStatus: (contactId, messageId, status) => set((state) => ({
         messages: {
           ...state.messages,
@@ -106,6 +136,26 @@ export const useAppStore = create<AppState>()(
       drafts: {},
       setDraft: (contactId, text) => set((state) => ({
         drafts: { ...state.drafts, [contactId]: text },
+      })),
+
+      // Unread
+      unreadCounts: {},
+      incrementUnread: (contactId) => set((state) => ({
+        unreadCounts: { ...state.unreadCounts, [contactId]: (state.unreadCounts[contactId] || 0) + 1 },
+      })),
+      clearUnread: (contactId) => set((state) => ({
+        unreadCounts: { ...state.unreadCounts, [contactId]: 0 },
+        chats: state.chats.map(c => c.id === contactId ? { ...c, unreadCount: 0 } : c),
+      })),
+      totalUnread: () => {
+        const counts = get().unreadCounts;
+        return Object.values(counts).reduce((sum, c) => sum + c, 0);
+      },
+
+      // Favorites
+      favorites: {},
+      toggleFavorite: (contactId) => set((state) => ({
+        favorites: { ...state.favorites, [contactId]: !state.favorites[contactId] },
       })),
 
       loading: true,
@@ -149,6 +199,7 @@ export const useAppStore = create<AppState>()(
 
           const messagesMap: Record<string, Message[]> = {};
           const lastMessages: Record<string, Message> = {};
+          const unreadCounts: Record<string, number> = { ...cached.unreadCounts };
 
           (messagesData || []).forEach((m: any) => {
             const message: Message = {
@@ -165,13 +216,19 @@ export const useAppStore = create<AppState>()(
             lastMessages[m.contact_id] = message;
           });
 
-          const chats: Chat[] = contacts.filter(c => !c.isArchived).map(contact => ({
+          const chats: Chat[] = contacts.map(contact => ({
             id: contact.id, contact,
-            lastMessage: lastMessages[contact.id], unreadCount: 0,
+            lastMessage: lastMessages[contact.id],
+            unreadCount: unreadCounts[contact.id] || 0,
             isPinned: contact.isPinned, isMuted: contact.isMuted, isArchived: contact.isArchived,
+            isFavorite: cached.favorites[contact.id] || false,
           }));
 
           chats.sort((a, b) => {
+            // Favorites first
+            const aFav = cached.favorites[a.id] ? 1 : 0;
+            const bFav = cached.favorites[b.id] ? 1 : 0;
+            if (aFav !== bFav) return bFav - aFav;
             if (a.isPinned && !b.isPinned) return -1;
             if (!a.isPinned && b.isPinned) return 1;
             const aTime = a.lastMessage?.timestamp.getTime() || 0;
@@ -179,7 +236,7 @@ export const useAppStore = create<AppState>()(
             return bTime - aTime;
           });
 
-          set({ contacts, chats, messages: messagesMap, loading: false });
+          set({ contacts, chats, messages: messagesMap, loading: false, unreadCounts });
         } catch (error) {
           console.error('Error loading data:', error);
           set({ loading: false });
@@ -194,6 +251,9 @@ export const useAppStore = create<AppState>()(
 
       searchQuery: '',
       setSearchQuery: (query) => set({ searchQuery: query }),
+
+      editContactId: null,
+      setEditContactId: (id) => set({ editContactId: id }),
     }),
     {
       name: 'lotus-crm-store',
@@ -203,6 +263,8 @@ export const useAppStore = create<AppState>()(
         chats: state.chats,
         messages: state.messages,
         drafts: state.drafts,
+        unreadCounts: state.unreadCounts,
+        favorites: state.favorites,
       }),
     }
   )

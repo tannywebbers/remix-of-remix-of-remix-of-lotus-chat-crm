@@ -17,6 +17,20 @@ interface TemplateSelectorProps {
   onSelectTemplate: (template: Template, params: Record<string, string>) => void;
 }
 
+// Variable mapping: named variables → contact data
+function mapVariables(text: string, contact: TemplateSelectorProps['contact']): string {
+  const paymentDetails = contact.accountDetails?.length
+    ? contact.accountDetails.map(a => `${a.bank} - ${a.accountNumber} (${a.accountName})`).join('; ')
+    : '';
+
+  return text
+    .replace(/\{\{customer_name\}\}/gi, contact.name)
+    .replace(/\{\{loan_id\}\}/gi, contact.loanId)
+    .replace(/\{\{amount\}\}/gi, contact.amount?.toString() || '')
+    .replace(/\{\{payment_details\}\}/gi, paymentDetails)
+    .replace(/\{\{app_name\}\}/gi, contact.appType || 'Tloan');
+}
+
 export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelectorProps) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
@@ -46,12 +60,15 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
       if (comp.type === 'BODY' && comp.example?.body_text) {
         comp.example.body_text[0]?.forEach((param: string, index: number) => {
           const paramKey = `{{${index + 1}}}`;
-          if (param.toLowerCase().includes('name')) defaultParams[paramKey] = contact.name;
-          else if (param.toLowerCase().includes('loan') || param.toLowerCase().includes('id')) defaultParams[paramKey] = contact.loanId;
-          else if (param.toLowerCase().includes('amount')) defaultParams[paramKey] = contact.amount?.toString() || '';
-          else if (param.toLowerCase().includes('app')) defaultParams[paramKey] = contact.appType || '';
-          else if (param.toLowerCase().includes('day')) defaultParams[paramKey] = contact.dayType?.toString() || '';
-          else if (param.toLowerCase().includes('account') && contact.accountDetails?.[0]) defaultParams[paramKey] = `${contact.accountDetails[0].bank} - ${contact.accountDetails[0].accountNumber}`;
+          const lower = param.toLowerCase();
+          if (lower.includes('name') || lower.includes('customer')) defaultParams[paramKey] = contact.name;
+          else if (lower.includes('loan') || lower.includes('id')) defaultParams[paramKey] = contact.loanId;
+          else if (lower.includes('amount')) defaultParams[paramKey] = contact.amount?.toString() || '';
+          else if (lower.includes('app')) defaultParams[paramKey] = contact.appType || 'Tloan';
+          else if (lower.includes('day')) defaultParams[paramKey] = contact.dayType?.toString() || '';
+          else if ((lower.includes('account') || lower.includes('payment')) && contact.accountDetails?.[0]) {
+            defaultParams[paramKey] = `${contact.accountDetails[0].bank} - ${contact.accountDetails[0].accountNumber} (${contact.accountDetails[0].accountName})`;
+          }
           else defaultParams[paramKey] = param;
         });
       }
@@ -60,20 +77,30 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
   };
 
   const handleSelectTemplate = (template: Template) => { setSelectedTemplate(template); setParams(getDefaultParams(template)); };
-  const handleConfirm = () => { if (selectedTemplate) { onSelectTemplate(selectedTemplate, params); setOpen(false); setSelectedTemplate(null); } };
+  
+  const handleConfirm = () => {
+    if (selectedTemplate) {
+      onSelectTemplate(selectedTemplate, params);
+      setOpen(false);
+      setSelectedTemplate(null);
+    }
+  };
+
   const filteredTemplates = templates.filter(t => t.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const renderTemplatePreview = (template: Template) => {
     const body = template.components?.find((c: any) => c.type === 'BODY');
     let text = body?.text || 'No preview available';
+    // Replace numbered params
     Object.entries(params).forEach(([key, value]) => { text = text.replace(key, value || key); });
+    // Replace named variables
+    text = mapVariables(text, contact);
     return text;
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        {/* VISIBLE on both mobile and desktop */}
         <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0">
           <FileText className="h-5 w-5 text-muted-foreground" />
         </Button>

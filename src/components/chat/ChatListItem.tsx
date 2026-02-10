@@ -4,23 +4,12 @@ import { ContactAvatar } from '@/components/shared/ContactAvatar';
 import { MessageStatus } from '@/components/shared/MessageStatus';
 import { formatChatTime } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
-import { Pin, BellOff, Archive, Trash2, MessageSquareOff } from 'lucide-react';
+import { Pin, BellOff, Archive, Trash2, MessageSquareOff, Star } from 'lucide-react';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useAppStore } from '@/store/appStore';
 import { supabase } from '@/integrations/supabase/client';
@@ -33,13 +22,14 @@ interface ChatListItemProps {
 }
 
 export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
-  const { contact, lastMessage, unreadCount, isPinned, isMuted } = chat;
-  const { updateContact, setMessages, chats, setChats } = useAppStore();
+  const { contact, lastMessage, unreadCount, isPinned, isMuted, isArchived } = chat;
+  const { updateContact, setMessages, chats, setChats, favorites, toggleFavorite } = useAppStore();
   const { toast } = useToast();
   const [showOptions, setShowOptions] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const [isLongPress, setIsLongPress] = useState(false);
+  const isFav = favorites[chat.id];
 
   const handleTouchStart = () => {
     longPressTimer.current = setTimeout(() => {
@@ -70,7 +60,6 @@ export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
       setChats(updatedChats);
       toast({ title: 'Chat cleared', description: 'Messages deleted. Contact preserved.' });
     } catch (error) {
-      console.error('Error deleting chat:', error);
       toast({ title: 'Failed to clear chat', variant: 'destructive' });
     }
     setShowDeleteDialog(false);
@@ -80,17 +69,15 @@ export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
   const handleAction = async (action: 'pin' | 'mute' | 'archive') => {
     try {
       const field = action === 'pin' ? 'is_pinned' : action === 'mute' ? 'is_muted' : 'is_archived';
-      const currentValue = action === 'pin' ? isPinned : action === 'mute' ? isMuted : false;
+      const currentValue = action === 'pin' ? isPinned : action === 'mute' ? isMuted : (isArchived || contact.isArchived);
       await supabase.from('contacts').update({ [field]: !currentValue }).eq('id', chat.id);
       updateContact(chat.id, { 
         [action === 'pin' ? 'isPinned' : action === 'mute' ? 'isMuted' : 'isArchived']: !currentValue 
       } as any);
       toast({ 
-        title: action === 'pin' 
-          ? (currentValue ? 'Chat unpinned' : 'Chat pinned')
-          : action === 'mute'
-          ? (currentValue ? 'Unmuted' : 'Muted')
-          : 'Archived'
+        title: action === 'pin' ? (currentValue ? 'Chat unpinned' : 'Chat pinned')
+          : action === 'mute' ? (currentValue ? 'Unmuted' : 'Muted')
+          : (currentValue ? 'Unarchived' : 'Archived')
       });
     } catch (error) {
       toast({ title: `Failed to ${action} chat`, variant: 'destructive' });
@@ -142,6 +129,7 @@ export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
               </div>
               
               <div className="flex items-center gap-1 shrink-0 ml-2">
+                {isFav && <Star className="h-[14px] w-[14px] text-amber-500 fill-amber-500" />}
                 {isPinned && <Pin className="h-[14px] w-[14px] text-muted-foreground fill-muted-foreground" />}
                 {isMuted && <BellOff className="h-[14px] w-[14px] text-muted-foreground" />}
                 {unreadCount > 0 && (
@@ -159,6 +147,10 @@ export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
             <span className="sr-only">Options</span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuItem onClick={() => { toggleFavorite(chat.id); setShowOptions(false); }}>
+              <Star className={cn("h-4 w-4 mr-3", isFav && "fill-amber-500 text-amber-500")} />
+              {isFav ? 'Remove from favorites' : 'Add to favorites'}
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={() => handleAction('pin')}>
               <Pin className="h-4 w-4 mr-3" />
               {isPinned ? 'Unpin chat' : 'Pin chat'}
@@ -169,7 +161,7 @@ export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => handleAction('archive')}>
               <Archive className="h-4 w-4 mr-3" />
-              Archive chat
+              {(isArchived || contact.isArchived) ? 'Unarchive chat' : 'Archive chat'}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem 

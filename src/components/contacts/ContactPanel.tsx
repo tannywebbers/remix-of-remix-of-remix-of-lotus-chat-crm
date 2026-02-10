@@ -1,4 +1,4 @@
-import { Phone, Edit2, Trash2, CreditCard, Banknote, Smartphone, Calendar } from 'lucide-react';
+import { Phone, Edit2, Trash2, CreditCard, Banknote, Smartphone, Calendar, X } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -9,7 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 
 export function ContactPanel() {
-  const { activeChat, setShowContactPanel, deleteContact } = useAppStore();
+  const { activeChat, setShowContactPanel, deleteContact, setEditContactId } = useAppStore();
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -21,13 +21,8 @@ export function ContactPanel() {
     if (!window.confirm(`Are you sure you want to delete ${contact.name}?`)) return;
     
     try {
-      const { error } = await supabase
-        .from('contacts')
-        .delete()
-        .eq('id', contact.id);
-
+      const { error } = await supabase.from('contacts').delete().eq('id', contact.id);
       if (error) throw error;
-
       deleteContact(contact.id);
       setShowContactPanel(false);
       toast({ title: 'Contact deleted', description: `${contact.name} has been removed.` });
@@ -38,24 +33,22 @@ export function ContactPanel() {
 
   return (
     <div className="w-full md:w-80 h-full bg-panel flex flex-col md:border-l md:border-panel-border overflow-hidden">
+      {/* Close button header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-panel-header border-b border-panel-border shrink-0">
+        <h3 className="font-semibold text-[17px]">Contact Info</h3>
+        <Button variant="ghost" size="icon" onClick={() => setShowContactPanel(false)} className="h-9 w-9">
+          <X className="h-5 w-5" />
+        </Button>
+      </div>
+
       {/* Content */}
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         {/* Profile */}
         <div className="flex flex-col items-center py-8 px-4 bg-panel-header/50">
-          <ContactAvatar
-            name={contact.name}
-            avatar={contact.avatar}
-            isOnline={contact.isOnline}
-            size="lg"
-          />
+          <ContactAvatar name={contact.name} avatar={contact.avatar} isOnline={contact.isOnline} size="lg" />
           <h2 className="mt-4 text-xl font-medium">{contact.name}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {contact.isOnline 
-              ? 'Online' 
-              : contact.lastSeen 
-                ? formatLastSeen(contact.lastSeen)
-                : 'Offline'
-            }
+            {contact.isOnline ? 'Online' : contact.lastSeen ? formatLastSeen(contact.lastSeen) : 'Offline'}
           </p>
         </div>
 
@@ -64,9 +57,7 @@ export function ContactPanel() {
         {/* CRM Details */}
         <div className="p-4 space-y-4">
           <div>
-            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-              Loan Details
-            </h4>
+            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Loan Details</h4>
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
@@ -96,7 +87,7 @@ export function ContactPanel() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">App Type</p>
-                  <p className="font-medium capitalize">{(contact as any).appType || 'Tloan'}</p>
+                  <p className="font-medium capitalize">{contact.appType || 'Tloan'}</p>
                 </div>
               </div>
 
@@ -106,7 +97,7 @@ export function ContactPanel() {
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Day Type</p>
-                  <p className="font-medium">{(contact as any).dayType ?? 0} Day</p>
+                  <p className="font-medium">{contact.dayType ?? 0} Day</p>
                 </div>
               </div>
             </div>
@@ -115,9 +106,7 @@ export function ContactPanel() {
           <Separator />
 
           <div>
-            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-              Contact Information
-            </h4>
+            <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Contact Information</h4>
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <div className="h-8 w-8 rounded-full bg-accent flex items-center justify-center">
@@ -135,9 +124,7 @@ export function ContactPanel() {
             <>
               <Separator />
               <div>
-                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">
-                  Bank Accounts
-                </h4>
+                <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Bank Accounts</h4>
                 <div className="space-y-3">
                   {contact.accountDetails.map((account, index) => (
                     <div key={account.id || index} className="p-3 rounded-lg bg-muted/50">
@@ -155,7 +142,11 @@ export function ContactPanel() {
 
       {/* Actions */}
       <div className="p-4 border-t border-panel-border space-y-2 shrink-0">
-        <Button variant="outline" className="w-full justify-start gap-2">
+        <Button 
+          variant="outline" 
+          className="w-full justify-start gap-2"
+          onClick={() => { setEditContactId(contact.id); }}
+        >
           <Edit2 className="h-4 w-4" />
           Edit Contact
         </Button>

@@ -46,6 +46,7 @@ export interface Chat {
   isPinned?: boolean;
   isMuted?: boolean;
   isArchived?: boolean;
+  isFavorite?: boolean;
 }
 
 export interface User {

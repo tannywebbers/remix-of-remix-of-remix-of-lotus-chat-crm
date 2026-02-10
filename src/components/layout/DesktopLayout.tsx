@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { MessageCircle, Users, Settings, SquarePen, Search, UserPlus, Menu, X, BarChart3 } from 'lucide-react';
+import { MessageCircle, Users, Settings, SquarePen, UserPlus, Menu } from 'lucide-react';
 import { ChatList } from '@/components/chat/ChatList';
 import { ChatView } from '@/components/chat/ChatView';
 import { ContactPanel } from '@/components/contacts/ContactPanel';
 import { AddContactModal } from '@/components/contacts/AddContactModal';
+import { EditContactModal } from '@/components/contacts/EditContactModal';
 import { SettingsPage } from '@/components/settings/SettingsPage';
 import { NewChatModal } from '@/components/chat/NewChatModal';
 import { useAppStore } from '@/store/appStore';
@@ -18,9 +19,10 @@ const sidebarItems: { mode: ViewMode; icon: typeof MessageCircle; label: string;
 ];
 
 export function DesktopLayout() {
-  const { showContactPanel, activeChat, viewMode, setViewMode, setShowAddContactModal } = useAppStore();
+  const { showContactPanel, activeChat, viewMode, setViewMode, setShowAddContactModal, editContactId, setEditContactId } = useAppStore();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
+  const totalUnread = useAppStore.getState().totalUnread();
 
   return (
     <div className="h-screen flex overflow-hidden bg-background">
@@ -43,7 +45,7 @@ export function DesktopLayout() {
               key={mode}
               onClick={() => setViewMode(mode)}
               className={cn(
-                'flex flex-col items-center gap-0.5 w-14 py-2 rounded-xl transition-all',
+                'relative flex flex-col items-center gap-0.5 w-14 py-2 rounded-xl transition-all',
                 viewMode === mode
                   ? 'bg-primary/10 text-primary'
                   : 'text-muted-foreground hover:bg-accent'
@@ -59,6 +61,11 @@ export function DesktopLayout() {
                 <Icon className={cn("h-6 w-6", viewMode === mode && "stroke-[2.5px]")} />
               )}
               <span className="text-[10px] font-semibold">{label}</span>
+              {mode === 'chats' && totalUnread > 0 && (
+                <span className="absolute top-1 right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                  {totalUnread > 99 ? '99+' : totalUnread}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -95,7 +102,10 @@ export function DesktopLayout() {
       )}
 
       {/* Main Panel - ChatList / Contacts / Settings */}
-      <div className="w-[380px] lg:w-[420px] shrink-0 flex flex-col border-r border-panel-border">
+      <div className={cn(
+        "shrink-0 flex flex-col border-r border-panel-border",
+        sidebarOpen ? "w-[380px] lg:w-[420px]" : "w-[380px] lg:w-[420px] ml-12"
+      )}>
         {viewMode === 'settings' ? (
           <SettingsPage />
         ) : (
@@ -114,6 +124,13 @@ export function DesktopLayout() {
       {activeChat && showContactPanel && <ContactPanel />}
 
       <AddContactModal />
+      {editContactId && (
+        <EditContactModal
+          open={!!editContactId}
+          onOpenChange={(open) => { if (!open) setEditContactId(null); }}
+          contactId={editContactId}
+        />
+      )}
       <NewChatModal 
         open={showNewChatModal}
         onClose={() => setShowNewChatModal(false)}
