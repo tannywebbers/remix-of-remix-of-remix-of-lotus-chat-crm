@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, MoreVertical, Phone, Video, Info, ArrowLeft, Trash2, Pin, BellOff, Archive, X, MessageCircle, AlertTriangle, Star } from 'lucide-react';
+import { Send, MoreVertical, Phone, Video, Info, ArrowLeft, Trash2, Pin, BellOff, Archive, X, MessageCircle, AlertTriangle, Star, Clipboard } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,6 +16,7 @@ import {
 import { formatLastSeen } from '@/lib/utils/format';
 import { Message } from '@/types';
 import { useToast } from '@/hooks/use-toast';
+import { getWhatsAppErrorExplanation } from '@/lib/whatsappErrors';
 
 interface ChatViewProps {
   onBack?: () => void;
@@ -51,29 +52,9 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     }
   }, [activeChat?.id]);
 
-  // Real-time listener
+  // Real-time listener for this chat's messages
   useEffect(() => {
     if (!activeChat || !user) return;
-
-    const insertChannel = supabase
-      .channel(`messages-insert-${activeChat.id}`)
-      .on('postgres_changes', {
-        event: 'INSERT', schema: 'public', table: 'messages',
-        filter: `contact_id=eq.${activeChat.id}`,
-      }, (payload) => {
-        const m = payload.new as any;
-        const newMessage: Message = {
-          id: m.id, contactId: m.contact_id, content: m.content,
-          type: m.type, status: m.status, isOutgoing: m.is_outgoing,
-          timestamp: new Date(m.created_at), mediaUrl: m.media_url,
-          whatsappMessageId: m.whatsapp_message_id,
-        };
-        const existing = useAppStore.getState().messages[activeChat.id] || [];
-        if (!existing.find(msg => msg.id === newMessage.id)) {
-          addMessage(activeChat.id, newMessage);
-        }
-      })
-      .subscribe();
 
     const updateChannel = supabase
       .channel(`messages-update-${activeChat.id}`)
@@ -87,9 +68,29 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       .subscribe();
 
     return () => {
-      supabase.removeChannel(insertChannel);
       supabase.removeChannel(updateChannel);
     };
+  }, [activeChat?.id, user]);
+
+  // Clipboard paste handler for images
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      if (!activeChat || !user) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of Array.from(items)) {
+        if (item.type.startsWith('image/')) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) {
+            handleFileUpload(file, 'image');
+          }
+          break;
+        }
+      }
+    };
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
   }, [activeChat?.id, user]);
 
   const sendMessageToWhatsApp = async (content: string, type: 'text' | 'image' | 'document' | 'audio' = 'text', mediaUrl?: string) => {
@@ -109,10 +110,24 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         },
       });
       if (error) throw new Error(error.message);
-      if (!data?.success) throw new Error(data?.error || 'Send failed');
+      if (!data?.success) {
+        const errMsg = data?.error || 'Send failed';
+        const explanation = getWhatsAppErrorExplanation(errMsg);
+        toast({
+          title: explanation.title,
+          description: `${explanation.description}\n\n💡 ${explanation.action}`,
+          variant: 'destructive',
+        });
+        return null;
+      }
       return data.messageId;
     } catch (err: any) {
-      toast({ title: 'Send failed', description: err.message, variant: 'destructive' });
+      const explanation = getWhatsAppErrorExplanation(err.message);
+      toast({
+        title: explanation.title,
+        description: `${explanation.description}\n\n💡 ${explanation.action}`,
+        variant: 'destructive',
+      });
       return null;
     }
   };
@@ -144,7 +159,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     } finally { setSending(false); }
   };
 
-  const handleFileUpload = async (file: File, type: 'image' | 'document') => {
+  const handleFileUpload = async (file: File, type: 'image' | 'document' | 'audio') => {
     if (!activeChat || !user) return;
     setUploading(true);
     try {
@@ -154,15 +169,16 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       if (uploadError) throw uploadError;
       const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(filePath);
       const mediaUrl = urlData.publicUrl;
-      const whatsappMessageId = await sendMessageToWhatsApp(file.name, type, mediaUrl);
+      const msgType = type === 'audio' ? 'audio' : type;
+      const whatsappMessageId = await sendMessageToWhatsApp(file.name, msgType as any, mediaUrl);
       const { data, error } = await supabase.from('messages').insert({
-        user_id: user.id, contact_id: activeChat.id, content: file.name, type,
+        user_id: user.id, contact_id: activeChat.id, content: file.name, type: msgType,
         status: whatsappMessageId ? 'sent' : 'failed', is_outgoing: true,
         media_url: mediaUrl, whatsapp_message_id: whatsappMessageId || null,
       }).select().single();
       if (error) throw error;
       addMessage(activeChat.id, {
-        id: data.id, contactId: data.contact_id, content: data.content, type,
+        id: data.id, contactId: data.contact_id, content: data.content, type: msgType as any,
         status: whatsappMessageId ? 'sent' : 'failed', isOutgoing: true,
         timestamp: new Date(data.created_at), mediaUrl,
       });
@@ -209,7 +225,12 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           to: activeChat.contact.phone, type: 'template', templateName: template.name, templateParams: params,
         },
       });
-      if (error || !data?.success) throw new Error(data?.error || 'Failed to send template');
+      if (error || !data?.success) {
+        const errMsg = data?.error || error?.message || 'Failed to send template';
+        const explanation = getWhatsAppErrorExplanation(errMsg);
+        toast({ title: explanation.title, description: `${explanation.description}\n\n💡 ${explanation.action}`, variant: 'destructive' });
+        return;
+      }
       const bodyComponent = template.components?.find((c: any) => c.type === 'BODY');
       let content = bodyComponent?.text || template.name;
       Object.entries(params).forEach(([key, value]) => { content = content.replace(key, value); });
@@ -342,7 +363,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       {/* Input Bar */}
       <div className="px-2 sm:px-3 py-2 bg-panel-header border-t border-panel-border shrink-0">
         <div className="flex items-center gap-1 max-w-3xl mx-auto">
-          <FileUploadButton onFileSelect={handleFileUpload} uploading={uploading} />
+          <FileUploadButton onFileSelect={(file, type) => handleFileUpload(file, type)} uploading={uploading} />
           <TemplateSelector contact={contact as any} onSelectTemplate={handleTemplateSelect} />
 
           {isRecording ? (

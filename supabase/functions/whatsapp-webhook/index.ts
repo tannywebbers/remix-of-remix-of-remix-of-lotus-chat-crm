@@ -97,7 +97,54 @@ serve(async (req) => {
               }).eq('id', contact.id);
             }
           } else {
-            console.log('No contact found for phone:', from);
+            // AUTO-CREATE CONTACT for unknown numbers
+            // Find which user this webhook belongs to (from userId param or find settings by phone)
+            let targetUserId = userId;
+
+            if (!targetUserId) {
+              // Try to find user from whatsapp_settings
+              const { data: allSettings } = await supabase
+                .from('whatsapp_settings')
+                .select('user_id')
+                .eq('is_connected', true)
+                .limit(1);
+              if (allSettings && allSettings.length > 0) {
+                targetUserId = allSettings[0].user_id;
+              }
+            }
+
+            if (targetUserId) {
+              console.log('Auto-creating contact for phone:', from, 'user:', targetUserId);
+
+              // Get contact name from WhatsApp profile if available
+              const contactName = value.contacts?.[0]?.profile?.name || from;
+
+              const { data: newContact, error: createError } = await supabase.from('contacts').insert({
+                user_id: targetUserId,
+                name: contactName,
+                phone: from,
+                loan_id: `WA-${Date.now()}`,
+              }).select().single();
+
+              if (createError) {
+                console.error('Auto-create contact error:', createError);
+              } else if (newContact) {
+                console.log('Contact auto-created:', newContact.id);
+
+                const { error: msgError } = await supabase.from('messages').insert({
+                  user_id: targetUserId, contact_id: newContact.id,
+                  content, type, status: 'delivered', is_outgoing: false,
+                  media_url: mediaUrl, whatsapp_message_id: messageId,
+                });
+                if (msgError) console.error('Insert message for new contact error:', msgError);
+
+                await supabase.from('contacts').update({
+                  last_seen: timestamp.toISOString(), is_online: true,
+                }).eq('id', newContact.id);
+              }
+            } else {
+              console.log('No user found for incoming message from:', from);
+            }
           }
         }
       }
@@ -109,7 +156,6 @@ serve(async (req) => {
           const newStatus = status.status; // sent, delivered, read, failed
           console.log('Status update:', waMessageId, '->', newStatus);
 
-          // Update message status by whatsapp_message_id
           const { error } = await supabase
             .from('messages')
             .update({ status: newStatus })

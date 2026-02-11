@@ -6,7 +6,7 @@ interface FilePreviewModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   file: File | null;
-  type: 'image' | 'document';
+  type: 'image' | 'document' | 'audio';
   onSend: () => void;
   sending?: boolean;
 }
