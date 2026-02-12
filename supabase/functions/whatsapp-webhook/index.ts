@@ -60,6 +60,16 @@ serve(async (req) => {
 
       // Handle incoming messages
       if (value.messages?.length > 0) {
+        // Get WhatsApp API token once for all messages
+        const { data: settings } = await supabase
+          .from('whatsapp_settings')
+          .select('api_token')
+          .eq('is_connected', true)
+          .limit(1)
+          .single();
+
+        const whatsappToken = settings?.api_token;
+
         for (const message of value.messages) {
           const from = message.from;
           const messageId = message.id;
@@ -69,43 +79,45 @@ serve(async (req) => {
           let type = 'text';
           let mediaUrl = null;
 
-          // Helper function to get media URL from WhatsApp
+          // CRITICAL FIX: Function to get actual media URL from WhatsApp
           const getMediaUrl = async (mediaId: string): Promise<string | null> => {
-            try {
-              // Get token from whatsapp_settings
-              const { data: settings } = await supabase
-                .from('whatsapp_settings')
-                .select('api_token')
-                .eq('is_connected', true)
-                .limit(1)
-                .single();
-              
-              if (!settings?.api_token) {
-                console.error('No WhatsApp API token found');
-                return null;
-              }
+            if (!whatsappToken) {
+              console.error('No WhatsApp API token available');
+              return null;
+            }
 
-              // Get media info from WhatsApp
+            try {
+              console.log('Fetching media URL for ID:', mediaId);
+              
+              // Step 1: Get media info (includes the URL)
               const mediaInfoResponse = await fetch(`${WHATSAPP_API_URL}/${mediaId}`, {
-                headers: { 'Authorization': `Bearer ${settings.api_token}` },
+                headers: { 'Authorization': `Bearer ${whatsappToken}` },
               });
               
               if (!mediaInfoResponse.ok) {
-                console.error('Failed to get media info:', await mediaInfoResponse.text());
+                const errorText = await mediaInfoResponse.text();
+                console.error('Failed to get media info:', errorText);
                 return null;
               }
 
               const mediaInfo = await mediaInfoResponse.json();
-              console.log('Media info retrieved:', mediaInfo.url ? 'URL found' : 'No URL');
-              
-              return mediaInfo.url || null;
+              const mediaFileUrl = mediaInfo.url;
+
+              if (!mediaFileUrl) {
+                console.error('No URL in media info response');
+                return null;
+              }
+
+              console.log('Media URL retrieved successfully');
+              return mediaFileUrl;
+
             } catch (err) {
-              console.error('Error getting media URL:', err);
+              console.error('Error fetching media URL:', err);
               return null;
             }
           };
 
-          // FIXED: Handle all media types properly
+          // Handle different message types
           switch (message.type) {
             case 'text':
               content = message.text?.body || '';
@@ -116,7 +128,7 @@ serve(async (req) => {
               content = message.image?.caption || '[Image]';
               if (message.image?.id) {
                 mediaUrl = await getMediaUrl(message.image.id);
-                console.log('Image URL:', mediaUrl ? 'Retrieved' : 'Failed');
+                console.log('Image URL:', mediaUrl ? 'Retrieved' : 'Failed to retrieve');
               }
               break;
 
@@ -125,7 +137,7 @@ serve(async (req) => {
               content = message.document?.filename || '[Document]';
               if (message.document?.id) {
                 mediaUrl = await getMediaUrl(message.document.id);
-                console.log('Document URL:', mediaUrl ? 'Retrieved' : 'Failed');
+                console.log('Document URL:', mediaUrl ? 'Retrieved' : 'Failed to retrieve');
               }
               break;
 
@@ -134,7 +146,7 @@ serve(async (req) => {
               content = '[Voice Message]';
               if (message.audio?.id) {
                 mediaUrl = await getMediaUrl(message.audio.id);
-                console.log('Audio URL:', mediaUrl ? 'Retrieved' : 'Failed');
+                console.log('Audio URL:', mediaUrl ? 'Retrieved' : 'Failed to retrieve');
               }
               break;
 
@@ -143,7 +155,7 @@ serve(async (req) => {
               content = '[Video]';
               if (message.video?.id) {
                 mediaUrl = await getMediaUrl(message.video.id);
-                console.log('Video URL:', mediaUrl ? 'Retrieved' : 'Failed');
+                console.log('Video URL:', mediaUrl ? 'Retrieved' : 'Failed to retrieve');
               }
               break;
 
@@ -152,7 +164,7 @@ serve(async (req) => {
               break;
           }
 
-          // Find all contacts with this phone number
+          // Find contacts with this phone number
           const { data: contacts } = await supabase
             .from('contacts')
             .select('id, user_id, name')
@@ -160,7 +172,7 @@ serve(async (req) => {
 
           if (contacts && contacts.length > 0) {
             for (const contact of contacts) {
-              // Insert message
+              // Insert message with media URL
               const { error } = await supabase.from('messages').insert({
                 user_id: contact.user_id,
                 contact_id: contact.id,
@@ -175,7 +187,12 @@ serve(async (req) => {
               if (error) {
                 console.error('Insert message error:', error);
               } else {
-                console.log('Message inserted for contact:', contact.id, 'Type:', type, 'Has media:', !!mediaUrl);
+                console.log('✅ Message inserted:', {
+                  contact: contact.id,
+                  type,
+                  hasMedia: !!mediaUrl,
+                  content: content.substring(0, 50)
+                });
               }
 
               // Update contact online status
@@ -229,10 +246,12 @@ serve(async (req) => {
                   whatsapp_message_id: messageId,
                 });
 
-                if (msgError) console.error('Insert message for new contact error:', msgError);
+                if (msgError) {
+                  console.error('Insert message for new contact error:', msgError);
+                } else {
+                  console.log('✅ Message inserted for new contact');
+                }
               }
-            } else {
-              console.log('No user found for incoming message from:', from);
             }
           }
         }
@@ -253,14 +272,14 @@ serve(async (req) => {
           if (error) {
             console.error('Status update error:', error);
           } else {
-            console.log('Status updated:', waMessageId, newStatus);
+            console.log('✅ Status updated');
           }
         }
       }
 
       return new Response('OK', { status: 200, headers: corsHeaders });
     } catch (error) {
-      console.error('Webhook error:', error);
+      console.error('❌ Webhook error:', error);
       return new Response('OK', { status: 200, headers: corsHeaders });
     }
   }
