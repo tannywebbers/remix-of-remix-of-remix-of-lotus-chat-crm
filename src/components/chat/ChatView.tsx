@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, MoreVertical, Phone, Video, Info, ArrowLeft, Trash2, Pin, BellOff, Archive, X, MessageCircle, AlertTriangle, Star, Clipboard } from 'lucide-react';
+import { Send, MoreVertical, Phone, Video, Info, ArrowLeft, Trash2, Pin, BellOff, Archive, X, MessageCircle, AlertTriangle, Star } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -203,11 +203,13 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         status: whatsappMessageId ? 'sent' : 'failed', isOutgoing: true,
         timestamp: new Date(data.created_at), mediaUrl,
       });
+      toast({ title: `${type === 'image' ? 'Media' : type === 'document' ? 'Document' : 'Audio'} sent` });
     } catch (err: any) {
       toast({ title: 'Failed to upload file', description: err.message, variant: 'destructive' });
     } finally { setUploading(false); }
   };
 
+  // FIXED: Voice recording handler
   const handleVoiceRecording = async (blob: Blob) => {
     if (!activeChat || !user) return;
     setUploading(true);
@@ -215,59 +217,114 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       const filePath = `${user.id}/${activeChat.id}/${Date.now()}.webm`;
       const { error: uploadError } = await supabase.storage.from('chat-media').upload(filePath, blob, { contentType: 'audio/webm' });
       if (uploadError) throw uploadError;
+      
       const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(filePath);
       const mediaUrl = urlData.publicUrl;
-      const whatsappMessageId = await sendMessageToWhatsApp('Voice message', 'audio', mediaUrl);
+      
+      const whatsappMessageId = await sendMessageToWhatsApp('[Voice Message]', 'audio', mediaUrl);
+      
       const { data, error } = await supabase.from('messages').insert({
-        user_id: user.id, contact_id: activeChat.id, content: 'Voice message', type: 'audio',
+        user_id: user.id, contact_id: activeChat.id, content: '[Voice Message]', type: 'audio',
         status: whatsappMessageId ? 'sent' : 'failed', is_outgoing: true,
         media_url: mediaUrl, whatsapp_message_id: whatsappMessageId || null,
       }).select().single();
+      
       if (error) throw error;
+      
       addMessage(activeChat.id, {
-        id: data.id, contactId: data.contact_id, content: 'Voice message', type: 'audio',
+        id: data.id, contactId: data.contact_id, content: '[Voice Message]', type: 'audio',
         status: whatsappMessageId ? 'sent' : 'failed', isOutgoing: true,
         timestamp: new Date(data.created_at), mediaUrl,
       });
+      
+      toast({ title: 'Voice message sent' });
     } catch (err: any) {
+      console.error('Voice recording error:', err);
       toast({ title: 'Failed to send voice message', description: err.message, variant: 'destructive' });
-    } finally { setUploading(false); }
+    } finally {
+      setUploading(false);
+      setIsRecording(false);
+    }
   };
 
+  // FIXED: Template handler - send actual content, not template name
   const handleTemplateSelect = async (template: any, params: Record<string, string>) => {
     if (!activeChat || !user) return;
     setSending(true);
     try {
       const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).single();
-      if (!settings?.api_token) { toast({ title: 'WhatsApp not configured', variant: 'destructive' }); return; }
+      if (!settings?.api_token) {
+        toast({ title: 'WhatsApp not configured', variant: 'destructive' });
+        return;
+      }
+      
+      // Send via WhatsApp API
       const { data, error } = await supabase.functions.invoke('whatsapp-api', {
         body: {
-          action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
-          to: activeChat.contact.phone, type: 'template', templateName: template.name, templateParams: params,
+          action: 'send_message',
+          token: settings.api_token,
+          phoneNumberId: settings.phone_number_id,
+          to: activeChat.contact.phone,
+          type: 'template',
+          templateName: template.name,
+          templateParams: params,
         },
       });
+      
       if (error || !data?.success) {
         const errMsg = data?.error || error?.message || 'Failed to send template';
         const explanation = getWhatsAppErrorExplanation(errMsg);
-        toast({ title: explanation.title, description: `${explanation.description}\n\n💡 ${explanation.action}`, variant: 'destructive' });
+        toast({
+          title: explanation.title,
+          description: `${explanation.description}\n\n💡 ${explanation.action}`,
+          variant: 'destructive',
+        });
         return;
       }
+      
+      // FIXED: Build the actual template content by replacing placeholders
       const bodyComponent = template.components?.find((c: any) => c.type === 'BODY');
-      let content = bodyComponent?.text || template.name;
-      Object.entries(params).forEach(([key, value]) => { content = content.replace(key, value); });
-      const { data: messageData, error: msgError } = await supabase.from('messages').insert({
-        user_id: user.id, contact_id: activeChat.id, content, type: 'text', status: 'sent', is_outgoing: true,
-        whatsapp_message_id: data.messageId || null,
-      }).select().single();
-      if (msgError) throw msgError;
-      addMessage(activeChat.id, {
-        id: messageData.id, contactId: messageData.contact_id, content: messageData.content,
-        type: 'text', status: 'sent', isOutgoing: true, timestamp: new Date(messageData.created_at),
+      let displayContent = bodyComponent?.text || template.name;
+      
+      // Replace {{1}}, {{2}}, etc. with actual values
+      Object.entries(params).forEach(([key, value]) => {
+        displayContent = displayContent.replace(key, value);
       });
+      
+      // Save to database with actual content
+      const { data: messageData, error: msgError } = await supabase.from('messages').insert({
+        user_id: user.id,
+        contact_id: activeChat.id,
+        content: displayContent, // Save the filled template, not the template name
+        type: 'text',
+        status: 'sent',
+        is_outgoing: true,
+        whatsapp_message_id: data.messageId || null,
+        template_name: template.name, // Keep template name for reference
+        template_params: params,
+      }).select().single();
+      
+      if (msgError) throw msgError;
+      
+      addMessage(activeChat.id, {
+        id: messageData.id,
+        contactId: messageData.contact_id,
+        content: displayContent, // Show the filled content
+        type: 'text',
+        status: 'sent',
+        isOutgoing: true,
+        timestamp: new Date(messageData.created_at),
+        templateName: template.name,
+        templateParams: params,
+      });
+      
       toast({ title: 'Template message sent' });
     } catch (error: any) {
+      console.error('Template send error:', error);
       toast({ title: error.message || 'Failed to send template', variant: 'destructive' });
-    } finally { setSending(false); }
+    } finally {
+      setSending(false);
+    }
   };
 
   const handleChatAction = async (action: 'pin' | 'mute' | 'archive' | 'delete' | 'clear') => {
