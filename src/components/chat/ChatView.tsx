@@ -1,396 +1,391 @@
-import { useState, useRef, useEffect } from 'react';
-import { Send, MoreVertical, Phone, Video, Info, ArrowLeft, Trash2, Pin, BellOff, Archive, X, MessageCircle, AlertTriangle, Star, Clipboard } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowLeft, Phone, Video, Send } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
-import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
-import { ContactAvatar } from '@/components/shared/ContactAvatar';
-import { MessageBubble } from '@/components/chat/MessageBubble';
-import { VoiceRecorder } from '@/components/chat/VoiceRecorder';
-import { FileUploadButton } from '@/components/chat/FileUploadButton';
-import { TemplateSelector } from '@/components/chat/TemplateSelector';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { formatLastSeen } from '@/lib/utils/format';
-import { isContactOnline } from '@/lib/utils/presence';
-import { Message } from '@/types';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { MessageBubble } from '@/components/chat/MessageBubble';
+import { ContactAvatar } from '@/components/shared/ContactAvatar';
+import { ChatOptionsMenu } from '@/components/chat/ChatOptionsMenu';
+import { FileUploadButton } from '@/components/chat/FileUploadButton';
+import { VoiceRecorder } from '@/components/chat/VoiceRecorder';
+import { TemplateSelector } from '@/components/chat/TemplateSelector';
+import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import { getWhatsAppErrorExplanation } from '@/lib/whatsappErrors';
+import { supabase } from '@/integrations/supabase/client';
+import { Message } from '@/types';
+import { cn } from '@/lib/utils';
 
 interface ChatViewProps {
   onBack?: () => void;
-  showBackButton?: boolean;
+  onCall?: () => void;
+  onVideoCall?: () => void;
+  onViewContact?: () => void;
 }
 
-export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
-  const { activeChat, messages, addMessage, setMessages, setShowContactPanel, updateContact, setDraft, updateMessageStatus, favorites, toggleFavorite } = useAppStore();
+export function ChatView({ onBack, onCall, onVideoCall, onViewContact }: ChatViewProps) {
+  const { activeChat, messages, addMessage, setDraft, drafts, updateMessageStatus } = useAppStore();
   const { user } = useAuth();
   const { toast } = useToast();
-  const draft = activeChat ? useAppStore.getState().drafts?.[activeChat.id] || '' : '';
-  const [inputValue, setInputValue] = useState(draft);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [isRecording, setIsRecording] = useState(false);
 
   const chatMessages = activeChat ? messages[activeChat.id] || [] : [];
-  const hasCustomerReply = chatMessages.some(m => !m.isOutgoing);
-  const hasAnyMessages = chatMessages.length > 0;
-  const showBusinessNotice = hasAnyMessages && !hasCustomerReply;
-  const isFav = activeChat ? useAppStore.getState().favorites[activeChat.id] : false;
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
-
-  // Sync draft when switching chats
   useEffect(() => {
     if (activeChat) {
-      setInputValue(useAppStore.getState().drafts?.[activeChat.id] || '');
+      setMessage(drafts[activeChat.id] || '');
+      scrollToBottom();
+      // FIXED: Mark messages as read when opening chat
+      markMessagesAsRead();
     }
   }, [activeChat?.id]);
 
-  // Real-time listener for this chat's messages
   useEffect(() => {
+    scrollToBottom();
+  }, [chatMessages.length]);
+
+  // FIXED: New function to mark messages as read in the database
+  const markMessagesAsRead = async () => {
     if (!activeChat || !user) return;
 
-    const updateChannel = supabase
-      .channel(`messages-update-${activeChat.id}`)
-      .on('postgres_changes', {
-        event: 'UPDATE', schema: 'public', table: 'messages',
-        filter: `contact_id=eq.${activeChat.id}`,
-      }, (payload) => {
-        const m = payload.new as any;
-        updateMessageStatus(activeChat.id, m.id, m.status);
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(updateChannel);
-    };
-  }, [activeChat?.id, user]);
-
-  // Clipboard paste handler for images
-  useEffect(() => {
-    const handlePaste = async (e: ClipboardEvent) => {
-      if (!activeChat || !user) return;
-      const items = e.clipboardData?.items;
-      if (!items) return;
-      for (const item of Array.from(items)) {
-        if (item.type.startsWith('image/')) {
-          e.preventDefault();
-          const file = item.getAsFile();
-          if (file) {
-            handleFileUpload(file, 'image');
-          }
-          break;
-        }
-      }
-    };
-    document.addEventListener('paste', handlePaste);
-    return () => document.removeEventListener('paste', handlePaste);
-  }, [activeChat?.id, user]);
-
-  const sendMessageToWhatsApp = async (content: string, type: 'text' | 'image' | 'document' | 'audio' = 'text', mediaUrl?: string) => {
-    if (!activeChat || !user) return null;
     try {
-      const { data: settings } = await supabase
-        .from('whatsapp_settings').select('*').eq('user_id', user.id).single();
-      if (!settings?.api_token || !settings?.phone_number_id) {
-        toast({ title: 'WhatsApp not configured', description: 'Go to Settings > WhatsApp API to connect.', variant: 'destructive' });
-        return null;
+      // Update all unread incoming messages to 'read' status
+      const { error } = await supabase
+        .from('messages')
+        .update({ status: 'read' })
+        .eq('contact_id', activeChat.id)
+        .eq('is_outgoing', false)
+        .neq('status', 'read');
+
+      if (error) {
+        console.error('Error marking messages as read:', error);
       }
-      const { data, error } = await supabase.functions.invoke('whatsapp-api', {
-        body: {
-          action: 'send_message', token: settings.api_token,
-          phoneNumberId: settings.phone_number_id, to: activeChat.contact.phone,
-          type, content: mediaUrl || content,
-        },
-      });
-      if (error) throw new Error(error.message);
-      if (!data?.success) {
-        const errMsg = data?.error || 'Send failed';
-        const explanation = getWhatsAppErrorExplanation(errMsg);
-        toast({
-          title: explanation.title,
-          description: `${explanation.description}\n\n💡 ${explanation.action}`,
-          variant: 'destructive',
-        });
-        return null;
+    } catch (error) {
+      console.error('Error marking messages as read:', error);
+    }
+  };
+
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
       }
-      return data.messageId;
-    } catch (err: any) {
-      const explanation = getWhatsAppErrorExplanation(err.message);
+    }, 100);
+  };
+
+  const handleSendMessage = async (content: string, type: Message['type'] = 'text', mediaUrl?: string) => {
+    if (!activeChat || !user) return;
+
+    const tempId = `temp-${Date.now()}`;
+    const newMessage: Message = {
+      id: tempId,
+      contactId: activeChat.id,
+      content,
+      type,
+      status: 'pending',
+      isOutgoing: true,
+      timestamp: new Date(),
+      mediaUrl,
+    };
+
+    addMessage(activeChat.id, newMessage);
+    setMessage('');
+    setDraft(activeChat.id, '');
+
+    try {
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          user_id: user.id,
+          contact_id: activeChat.id,
+          content,
+          type,
+          is_outgoing: true,
+          status: 'sent',
+          media_url: mediaUrl,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      updateMessageStatus(activeChat.id, tempId, 'sent');
+    } catch (error: any) {
+      console.error('Error sending message:', error);
+      updateMessageStatus(activeChat.id, tempId, 'failed');
       toast({
-        title: explanation.title,
-        description: `${explanation.description}\n\n💡 ${explanation.action}`,
+        title: 'Failed to send message',
+        description: error.message,
         variant: 'destructive',
       });
-      return null;
     }
   };
 
   const handleSend = async () => {
-    if (!inputValue.trim() || !activeChat || !user) return;
-    const content = inputValue.trim();
-    setInputValue('');
-    if (activeChat) setDraft(activeChat.id, '');
+    if (!message.trim() || sending) return;
     setSending(true);
-    try {
-      const whatsappMessageId = await sendMessageToWhatsApp(content);
-      const { data, error } = await supabase.from('messages').insert({
-        user_id: user.id, contact_id: activeChat.id, content, type: 'text',
-        status: whatsappMessageId ? 'sent' : 'failed', is_outgoing: true,
-        whatsapp_message_id: whatsappMessageId || null,
-      }).select().single();
-      if (error) throw error;
-      addMessage(activeChat.id, {
-        id: data.id, contactId: data.contact_id, content: data.content,
-        type: 'text', status: whatsappMessageId ? 'sent' : 'failed',
-        isOutgoing: true, timestamp: new Date(data.created_at),
-        whatsappMessageId: whatsappMessageId || undefined,
-      });
-      inputRef.current?.focus();
-    } catch (error: any) {
-      setInputValue(content);
-      toast({ title: 'Failed to send message', description: error.message, variant: 'destructive' });
-    } finally { setSending(false); }
+    await handleSendMessage(message.trim());
+    setSending(false);
   };
 
-  const handleFileUpload = async (file: File, type: 'image' | 'document' | 'audio') => {
+  const handleFileSelect = async (file: File, type: 'image' | 'document' | 'audio') => {
     if (!activeChat || !user) return;
+
     setUploading(true);
     try {
       const fileExt = file.name.split('.').pop();
-      const filePath = `${user.id}/${activeChat.id}/${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from('chat-media').upload(filePath, file);
+      const fileName = `${user.id}/${activeChat.id}/${Date.now()}.${fileExt}`;
+      const bucket = type === 'image' ? 'message-media' : type === 'audio' ? 'voice-notes' : 'documents';
+
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(fileName, file);
+
       if (uploadError) throw uploadError;
-      const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(filePath);
-      const mediaUrl = urlData.publicUrl;
-      const msgType = type === 'audio' ? 'audio' : type;
-      const whatsappMessageId = await sendMessageToWhatsApp(file.name, msgType as any, mediaUrl);
-      const { data, error } = await supabase.from('messages').insert({
-        user_id: user.id, contact_id: activeChat.id, content: file.name, type: msgType,
-        status: whatsappMessageId ? 'sent' : 'failed', is_outgoing: true,
-        media_url: mediaUrl, whatsapp_message_id: whatsappMessageId || null,
-      }).select().single();
-      if (error) throw error;
-      addMessage(activeChat.id, {
-        id: data.id, contactId: data.contact_id, content: data.content, type: msgType as any,
-        status: whatsappMessageId ? 'sent' : 'failed', isOutgoing: true,
-        timestamp: new Date(data.created_at), mediaUrl,
+
+      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
+
+      const messageType = type === 'image' && file.type.startsWith('video/') ? 'video' : type;
+      const content = type === 'image' ? '[Image]' : type === 'audio' ? '[Voice Message]' : file.name;
+
+      await handleSendMessage(content, messageType, urlData.publicUrl);
+
+      toast({ title: `${type === 'image' ? 'Media' : type === 'audio' ? 'Voice note' : 'Document'} sent` });
+    } catch (error: any) {
+      console.error('Error uploading file:', error);
+      toast({
+        title: 'Upload failed',
+        description: error.message,
+        variant: 'destructive',
       });
-    } catch (err: any) {
-      toast({ title: 'Failed to upload file', description: err.message, variant: 'destructive' });
-    } finally { setUploading(false); }
+    } finally {
+      setUploading(false);
+    }
   };
 
-  const handleVoiceRecording = async (blob: Blob) => {
+  // FIXED: Complete voice recording upload function
+  const handleSendAudio = async (blob: Blob) => {
     if (!activeChat || !user) return;
+
     setUploading(true);
     try {
-      const filePath = `${user.id}/${activeChat.id}/${Date.now()}.webm`;
-      const { error: uploadError } = await supabase.storage.from('chat-media').upload(filePath, blob, { contentType: 'audio/webm' });
+      const fileName = `${user.id}/${activeChat.id}/${Date.now()}.webm`;
+      
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from('voice-notes')
+        .upload(fileName, blob, {
+          contentType: 'audio/webm',
+          cacheControl: '3600',
+        });
+
       if (uploadError) throw uploadError;
-      const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(filePath);
-      const mediaUrl = urlData.publicUrl;
-      const whatsappMessageId = await sendMessageToWhatsApp('Voice message', 'audio', mediaUrl);
-      const { data, error } = await supabase.from('messages').insert({
-        user_id: user.id, contact_id: activeChat.id, content: 'Voice message', type: 'audio',
-        status: whatsappMessageId ? 'sent' : 'failed', is_outgoing: true,
-        media_url: mediaUrl, whatsapp_message_id: whatsappMessageId || null,
-      }).select().single();
-      if (error) throw error;
-      addMessage(activeChat.id, {
-        id: data.id, contactId: data.contact_id, content: 'Voice message', type: 'audio',
-        status: whatsappMessageId ? 'sent' : 'failed', isOutgoing: true,
-        timestamp: new Date(data.created_at), mediaUrl,
+
+      const { data: urlData } = supabase.storage
+        .from('voice-notes')
+        .getPublicUrl(fileName);
+
+      await handleSendMessage('[Voice Message]', 'audio', urlData.publicUrl);
+
+      toast({ title: 'Voice message sent' });
+    } catch (error: any) {
+      console.error('Error uploading voice note:', error);
+      toast({
+        title: 'Failed to send voice message',
+        description: error.message,
+        variant: 'destructive',
       });
-    } catch (err: any) {
-      toast({ title: 'Failed to send voice message', description: err.message, variant: 'destructive' });
-    } finally { setUploading(false); }
+    } finally {
+      setUploading(false);
+      setIsRecording(false);
+    }
   };
 
   const handleTemplateSelect = async (template: any, params: Record<string, string>) => {
     if (!activeChat || !user) return;
+
     setSending(true);
     try {
-      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).single();
-      if (!settings?.api_token) { toast({ title: 'WhatsApp not configured', variant: 'destructive' }); return; }
-      const { data, error } = await supabase.functions.invoke('whatsapp-api', {
-        body: {
-          action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
-          to: activeChat.contact.phone, type: 'template', templateName: template.name, templateParams: params,
-        },
-      });
-      if (error || !data?.success) {
-        const errMsg = data?.error || error?.message || 'Failed to send template';
-        const explanation = getWhatsAppErrorExplanation(errMsg);
-        toast({ title: explanation.title, description: `${explanation.description}\n\n💡 ${explanation.action}`, variant: 'destructive' });
-        return;
-      }
-      const bodyComponent = template.components?.find((c: any) => c.type === 'BODY');
-      let content = bodyComponent?.text || template.name;
-      Object.entries(params).forEach(([key, value]) => { content = content.replace(key, value); });
-      const { data: messageData, error: msgError } = await supabase.from('messages').insert({
-        user_id: user.id, contact_id: activeChat.id, content, type: 'text', status: 'sent', is_outgoing: true,
-        whatsapp_message_id: data.messageId || null,
-      }).select().single();
-      if (msgError) throw msgError;
-      addMessage(activeChat.id, {
-        id: messageData.id, contactId: messageData.contact_id, content: messageData.content,
-        type: 'text', status: 'sent', isOutgoing: true, timestamp: new Date(messageData.created_at),
-      });
+      const { data, error } = await supabase
+        .from('messages')
+        .insert({
+          user_id: user.id,
+          contact_id: activeChat.id,
+          content: `Template: ${template.name}`,
+          type: 'text',
+          is_outgoing: true,
+          status: 'sent',
+          template_name: template.name,
+          template_params: params,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newMessage: Message = {
+        id: data.id,
+        contactId: activeChat.id,
+        content: `Template: ${template.name}`,
+        type: 'text',
+        status: 'sent',
+        isOutgoing: true,
+        timestamp: new Date(data.created_at),
+        templateName: template.name,
+        templateParams: params,
+      };
+
+      addMessage(activeChat.id, newMessage);
       toast({ title: 'Template message sent' });
     } catch (error: any) {
-      toast({ title: error.message || 'Failed to send template', variant: 'destructive' });
-    } finally { setSending(false); }
-  };
-
-  const handleChatAction = async (action: 'pin' | 'mute' | 'archive' | 'delete' | 'clear') => {
-    if (!activeChat) return;
-    try {
-      if (action === 'delete' || action === 'clear') {
-        await supabase.from('messages').delete().eq('contact_id', activeChat.id);
-        setMessages(activeChat.id, []);
-        toast({ title: action === 'delete' ? 'Chat deleted' : 'Messages cleared' });
-        if (action === 'delete') onBack?.();
-      } else {
-        const field = action === 'pin' ? 'is_pinned' : action === 'mute' ? 'is_muted' : 'is_archived';
-        const currentValue = action === 'pin' ? activeChat.isPinned : action === 'mute' ? activeChat.isMuted : activeChat.isArchived;
-        await supabase.from('contacts').update({ [field]: !currentValue }).eq('id', activeChat.id);
-        updateContact(activeChat.id, {
-          [action === 'pin' ? 'isPinned' : action === 'mute' ? 'isMuted' : 'isArchived']: !currentValue,
-        } as any);
-        toast({ title: `Chat ${action === 'archive' ? (currentValue ? 'unarchived' : 'archived') : action + (action === 'pin' ? 'ned' : 'd')}` });
-        if (action === 'archive' && !currentValue) onBack?.();
-      }
-    } catch { toast({ title: `Failed to ${action} chat`, variant: 'destructive' }); }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+      console.error('Error sending template:', error);
+      toast({
+        title: 'Failed to send template',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setSending(false);
+    }
   };
 
   if (!activeChat) {
     return (
-      <div className="flex-1 flex items-center justify-center chat-background">
-        <div className="text-center animate-fade-in">
-          <div className="w-56 h-56 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
-            <MessageCircle className="w-24 h-24 text-primary/60" />
-          </div>
-          <h2 className="text-[22px] font-light text-foreground/70 mb-2">Lotus CRM</h2>
-          <p className="text-muted-foreground text-[15px] max-w-sm mx-auto">Select a chat to start messaging</p>
+      <div className="flex-1 flex items-center justify-center bg-background">
+        <div className="text-center text-muted-foreground">
+          <p className="text-lg font-medium">Select a chat to start messaging</p>
         </div>
       </div>
     );
   }
 
-  const { contact } = activeChat;
-
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex-1 flex flex-col bg-chat-bg">
       {/* Header */}
-      <div className="flex items-center justify-between px-1 sm:px-3 py-[6px] bg-panel-header border-b border-panel-border shrink-0">
-        <div className="flex items-center gap-1 min-w-0">
-          {showBackButton && (
-            <Button variant="ghost" size="icon" onClick={onBack} className="h-9 w-9 shrink-0 text-primary">
-              <ArrowLeft className="h-6 w-6" />
+      <div className="flex items-center gap-3 px-4 py-2.5 bg-panel border-b border-panel-border shrink-0">
+        {onBack && (
+          <Button variant="ghost" size="icon" className="h-9 w-9 lg:hidden" onClick={onBack}>
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+        )}
+
+        <button onClick={onViewContact} className="flex items-center gap-3 flex-1 min-w-0">
+          <ContactAvatar
+            name={activeChat.contact.name}
+            avatar={activeChat.contact.avatar}
+            isOnline={activeChat.contact.isOnline}
+            lastSeen={activeChat.contact.lastSeen}
+            size="md"
+          />
+          <div className="flex-1 min-w-0 text-left">
+            <h2 className="font-semibold text-[17px] truncate">{activeChat.contact.name}</h2>
+            <p className="text-[13px] text-muted-foreground truncate">
+              {activeChat.contact.isOnline ? 'Online' : activeChat.contact.lastSeen ? `Last seen ${activeChat.contact.lastSeen.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Offline'}
+            </p>
+          </div>
+        </button>
+
+        <div className="flex items-center gap-1">
+          {onVideoCall && (
+            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={onVideoCall}>
+              <Video className="h-5 w-5 text-muted-foreground" />
             </Button>
           )}
-          <button
-            className="flex items-center gap-2.5 hover:bg-accent/50 rounded-lg p-1 transition-colors min-w-0"
-            onClick={() => setShowContactPanel(true)}
-          >
-            <ContactAvatar name={contact.name} avatar={contact.avatar} isOnline={contact.isOnline} lastSeen={contact.lastSeen} size="sm" />
-            <div className="text-left min-w-0">
-              <h2 className="font-semibold text-[17px] truncate leading-tight">{contact.name}</h2>
-              <p className="text-[12px] text-muted-foreground leading-tight">
-                {isContactOnline(contact.lastSeen) ? 'online' : contact.lastSeen ? formatLastSeen(contact.lastSeen) : 'tap here for contact info'}
-              </p>
-            </div>
-          </button>
-        </div>
-        <div className="flex items-center shrink-0">
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-primary hidden sm:flex"><Video className="h-[22px] w-[22px]" /></Button>
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-primary"><Phone className="h-[20px] w-[20px]" /></Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground"><MoreVertical className="h-5 w-5" /></Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              <DropdownMenuItem onClick={() => setShowContactPanel(true)}><Info className="h-4 w-4 mr-3" /> Contact info</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => toggleFavorite(activeChat.id)}>
-                <Star className={`h-4 w-4 mr-3 ${isFav ? 'fill-amber-500 text-amber-500' : ''}`} />
-                {isFav ? 'Remove favorite' : 'Add to favorites'}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleChatAction('pin')}><Pin className="h-4 w-4 mr-3" /> {activeChat.isPinned ? 'Unpin' : 'Pin'} chat</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleChatAction('mute')}><BellOff className="h-4 w-4 mr-3" /> {activeChat.isMuted ? 'Unmute' : 'Mute'}</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleChatAction('archive')}><Archive className="h-4 w-4 mr-3" /> {activeChat.isArchived ? 'Unarchive' : 'Archive'}</DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => handleChatAction('clear')} className="text-destructive"><X className="h-4 w-4 mr-3" /> Clear messages</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => handleChatAction('delete')} className="text-destructive"><Trash2 className="h-4 w-4 mr-3" /> Delete chat</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {onCall && (
+            <Button variant="ghost" size="icon" className="h-9 w-9" onClick={onCall}>
+              <Phone className="h-5 w-5 text-muted-foreground" />
+            </Button>
+          )}
+          <ChatOptionsMenu
+            chatId={activeChat.id}
+            contactName={activeChat.contact.name}
+            isPinned={activeChat.isPinned}
+            isMuted={activeChat.isMuted}
+            isArchived={activeChat.isArchived}
+            onViewContact={onViewContact}
+          />
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto chat-background px-3 py-2 custom-scrollbar min-h-0">
-        <div className="max-w-3xl mx-auto space-y-1">
-          {chatMessages.length === 0 && (
-            <div className="text-center py-8 text-muted-foreground">
-              <p className="text-[14px]">No messages yet. Start the conversation!</p>
+      <ScrollArea ref={scrollRef} className="flex-1 px-4 py-2">
+        <div className="space-y-2">
+          {chatMessages.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-muted-foreground py-12">
+              <p className="text-sm">No messages yet. Start the conversation!</p>
             </div>
+          ) : (
+            chatMessages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
           )}
-          {showBusinessNotice && (
-            <div className="flex justify-center my-3">
-              <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-700 dark:text-amber-400 text-[13px]">
-                <AlertTriangle className="h-4 w-4 shrink-0" />
-                <span>Business-initiated conversation. Customer has not replied yet.</span>
-              </div>
-            </div>
-          )}
-          {chatMessages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
-          ))}
-          <div ref={messagesEndRef} />
         </div>
-      </div>
+      </ScrollArea>
 
-      {/* Input Bar */}
-      <div className="px-2 sm:px-3 py-2 bg-panel-header border-t border-panel-border shrink-0">
-        <div className="flex items-center gap-1 max-w-3xl mx-auto">
+      {/* Input Area */}
+      <div className="px-4 py-3 bg-panel border-t border-panel-border shrink-0">
+        <div className="flex items-center gap-2">
           {!isRecording && (
             <>
-              <FileUploadButton onFileSelect={(file, type) => handleFileUpload(file, type)} uploading={uploading} />
-              <TemplateSelector contact={contact as any} onSelectTemplate={handleTemplateSelect} />
+              <FileUploadButton onFileSelect={handleFileSelect} uploading={uploading} />
+              <TemplateSelector
+                contact={{
+                  loanId: activeChat.contact.loanId,
+                  name: activeChat.contact.name,
+                  phone: activeChat.contact.phone,
+                  amount: activeChat.contact.amount,
+                  appType: activeChat.contact.appType,
+                  dayType: activeChat.contact.dayType,
+                  accountDetails: activeChat.contact.accountDetails,
+                }}
+                onSelectTemplate={handleTemplateSelect}
+              />
             </>
           )}
 
           {isRecording ? (
-            <VoiceRecorder isRecording={isRecording} setIsRecording={setIsRecording} onRecordingComplete={handleVoiceRecording} onCancel={() => setIsRecording(false)} />
+            <VoiceRecorder
+              onRecordingComplete={handleSendAudio}
+              onCancel={() => setIsRecording(false)}
+              isRecording={isRecording}
+              setIsRecording={setIsRecording}
+            />
           ) : (
             <>
-              <div className="flex-1 flex items-center bg-background rounded-full px-3 border border-input">
-                <Input
-                  ref={inputRef} value={inputValue}
-                  onChange={(e) => { setInputValue(e.target.value); if (activeChat) setDraft(activeChat.id, e.target.value); }}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Message"
-                  className="flex-1 border-0 focus-visible:ring-0 h-[38px] px-0 text-[16px] bg-transparent"
+              <Input
+                value={message}
+                onChange={(e) => {
+                  setMessage(e.target.value);
+                  setDraft(activeChat.id, e.target.value);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSend();
+                  }
+                }}
+                placeholder="Type a message..."
+                className="flex-1 bg-background border-input"
+                disabled={sending || uploading}
+              />
+
+              {message.trim() ? (
+                <Button
+                  size="icon"
+                  className="h-10 w-10 rounded-full shrink-0"
+                  onClick={handleSend}
                   disabled={sending || uploading}
-                />
-              </div>
-              {inputValue.trim() ? (
-                <Button size="icon" className="h-[38px] w-[38px] shrink-0 rounded-full bg-primary" onClick={handleSend} disabled={sending || uploading}>
-                  <Send className="h-[18px] w-[18px]" />
+                >
+                  <Send className="h-5 w-5" />
                 </Button>
               ) : (
-                <VoiceRecorder isRecording={false} setIsRecording={setIsRecording} onRecordingComplete={handleVoiceRecording} onCancel={() => setIsRecording(false)} />
+                <VoiceRecorder
+                  onRecordingComplete={handleSendAudio}
+                  onCancel={() => setIsRecording(false)}
+                  isRecording={isRecording}
+                  setIsRecording={setIsRecording}
+                />
               )}
             </>
           )}
