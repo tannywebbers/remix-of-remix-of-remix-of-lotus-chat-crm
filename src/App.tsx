@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { useMessageNotifications } from '@/hooks/useMessageNotifications';
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
@@ -12,7 +13,7 @@ const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-
+  
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -23,17 +24,17 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-
+  
   if (!user) {
     return <Navigate to="/auth" replace />;
   }
-
+  
   return <>{children}</>;
 }
 
 function AuthRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
-
+  
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
@@ -41,21 +42,27 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
-
+  
   if (user) {
     return <Navigate to="/" replace />;
   }
-
+  
   return <>{children}</>;
 }
 
-const AppRoutes = () => (
-  <Routes>
-    <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
-    <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-    <Route path="*" element={<NotFound />} />
-  </Routes>
-);
+// FIXED: Component that uses the notification hook - must be inside AuthProvider
+function AppRoutes() {
+  // Call the notification hook here - inside the AuthProvider context
+  useMessageNotifications();
+  
+  return (
+    <Routes>
+      <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
+      <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+      <Route path="*" element={<NotFound />} />
+    </Routes>
+  );
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -64,6 +71,7 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          {/* AppRoutes is now a component that can use hooks */}
           <AppRoutes />
         </BrowserRouter>
       </TooltipProvider>
