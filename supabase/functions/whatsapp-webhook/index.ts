@@ -25,8 +25,6 @@ serve(async (req) => {
     const token = url.searchParams.get('hub.verify_token');
     const challenge = url.searchParams.get('hub.challenge');
 
-    console.log('Verification:', { mode, token, challenge, userId });
-
     if (mode === 'subscribe' && userId) {
       const { data: settings } = await supabase
         .from('whatsapp_settings')
@@ -35,7 +33,7 @@ serve(async (req) => {
         .single();
 
       if (settings && settings.verify_token === token) {
-        console.log('Webhook verified');
+        console.log('✅ Webhook verified');
         await supabase.from('whatsapp_settings').update({ is_connected: true }).eq('user_id', userId);
         return new Response(challenge, { status: 200 });
       }
@@ -48,7 +46,7 @@ serve(async (req) => {
   if (req.method === 'POST') {
     try {
       const body = await req.json();
-      console.log('Webhook payload:', JSON.stringify(body).substring(0, 500));
+      console.log('📨 Webhook payload received');
 
       const entry = body.entry?.[0];
       const changes = entry?.changes?.[0];
@@ -60,15 +58,21 @@ serve(async (req) => {
 
       // Handle incoming messages
       if (value.messages?.length > 0) {
-        // Get WhatsApp API token once for all messages
+        // Get WhatsApp API token
         const { data: settings } = await supabase
           .from('whatsapp_settings')
-          .select('api_token')
+          .select('api_token, user_id')
           .eq('is_connected', true)
           .limit(1)
           .single();
 
         const whatsappToken = settings?.api_token;
+        const settingsUserId = settings?.user_id;
+
+        if (!whatsappToken) {
+          console.error('❌ No WhatsApp API token found');
+          return new Response('OK', { status: 200, headers: corsHeaders });
+        }
 
         for (const message of value.messages) {
           const from = message.from;
@@ -79,24 +83,18 @@ serve(async (req) => {
           let type = 'text';
           let mediaUrl = null;
 
-          // CRITICAL FIX: Function to get actual media URL from WhatsApp
-          const getMediaUrl = async (mediaId: string): Promise<string | null> => {
-            if (!whatsappToken) {
-              console.error('No WhatsApp API token available');
-              return null;
-            }
-
+          // CRITICAL: Download media from WhatsApp and upload to Supabase storage
+          const downloadAndUploadMedia = async (mediaId: string, mediaType: string): Promise<string | null> => {
             try {
-              console.log('Fetching media URL for ID:', mediaId);
+              console.log(`📥 Downloading ${mediaType} from WhatsApp...`);
               
-              // Step 1: Get media info (includes the URL)
+              // Step 1: Get media URL from WhatsApp
               const mediaInfoResponse = await fetch(`${WHATSAPP_API_URL}/${mediaId}`, {
                 headers: { 'Authorization': `Bearer ${whatsappToken}` },
               });
               
               if (!mediaInfoResponse.ok) {
-                const errorText = await mediaInfoResponse.text();
-                console.error('Failed to get media info:', errorText);
+                console.error('❌ Failed to get media info');
                 return null;
               }
 
@@ -104,15 +102,66 @@ serve(async (req) => {
               const mediaFileUrl = mediaInfo.url;
 
               if (!mediaFileUrl) {
-                console.error('No URL in media info response');
+                console.error('❌ No URL in media info');
                 return null;
               }
 
-              console.log('Media URL retrieved successfully');
-              return mediaFileUrl;
+              // Step 2: Download the actual media file from WhatsApp
+              console.log('📥 Downloading media file...');
+              const mediaResponse = await fetch(mediaFileUrl, {
+                headers: { 'Authorization': `Bearer ${whatsappToken}` },
+              });
+
+              if (!mediaResponse.ok) {
+                console.error('❌ Failed to download media file');
+                return null;
+              }
+
+              // Step 3: Get the file as a blob
+              const mediaBlob = await mediaResponse.blob();
+              console.log(`✅ Downloaded ${mediaBlob.size} bytes`);
+
+              // Step 4: Determine file extension
+              const mimeType = mediaInfo.mime_type || mediaResponse.headers.get('content-type') || 'application/octet-stream';
+              let extension = 'bin';
+              
+              if (mimeType.includes('image/jpeg') || mimeType.includes('image/jpg')) extension = 'jpg';
+              else if (mimeType.includes('image/png')) extension = 'png';
+              else if (mimeType.includes('image/webp')) extension = 'webp';
+              else if (mimeType.includes('video/mp4')) extension = 'mp4';
+              else if (mimeType.includes('audio/ogg')) extension = 'ogg';
+              else if (mimeType.includes('audio/mpeg')) extension = 'mp3';
+              else if (mimeType.includes('audio/opus')) extension = 'opus';
+              else if (mimeType.includes('audio/')) extension = 'webm';
+              else if (mimeType.includes('application/pdf')) extension = 'pdf';
+              else if (mimeType.includes('application/vnd.openxmlformats-officedocument')) extension = 'docx';
+
+              // Step 5: Upload to Supabase storage
+              const fileName = `whatsapp/${from}/${Date.now()}.${extension}`;
+              console.log(`📤 Uploading to storage: ${fileName}`);
+
+              const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('chat-media')
+                .upload(fileName, mediaBlob, {
+                  contentType: mimeType,
+                  cacheControl: '3600',
+                });
+
+              if (uploadError) {
+                console.error('❌ Upload error:', uploadError);
+                return null;
+              }
+
+              // Step 6: Get public URL
+              const { data: urlData } = supabase.storage
+                .from('chat-media')
+                .getPublicUrl(fileName);
+
+              console.log('✅ Media uploaded successfully');
+              return urlData.publicUrl;
 
             } catch (err) {
-              console.error('Error fetching media URL:', err);
+              console.error('❌ Error downloading/uploading media:', err);
               return null;
             }
           };
@@ -123,12 +172,30 @@ serve(async (req) => {
               content = message.text?.body || '';
               break;
 
+            case 'button':
+              // FIXED: Handle button response
+              content = message.button?.text || message.button?.payload || '[Button]';
+              type = 'text';
+              console.log('🔘 Button clicked:', content);
+              break;
+
+            case 'interactive':
+              // Handle button clicks from templates
+              if (message.interactive?.type === 'button_reply') {
+                content = message.interactive.button_reply.title || '[Button]';
+                type = 'text';
+                console.log('🔘 Interactive button:', content);
+              } else if (message.interactive?.type === 'list_reply') {
+                content = message.interactive.list_reply.title || '[List item]';
+                type = 'text';
+              }
+              break;
+
             case 'image':
               type = 'image';
               content = message.image?.caption || '[Image]';
               if (message.image?.id) {
-                mediaUrl = await getMediaUrl(message.image.id);
-                console.log('Image URL:', mediaUrl ? 'Retrieved' : 'Failed to retrieve');
+                mediaUrl = await downloadAndUploadMedia(message.image.id, 'image');
               }
               break;
 
@@ -136,8 +203,7 @@ serve(async (req) => {
               type = 'document';
               content = message.document?.filename || '[Document]';
               if (message.document?.id) {
-                mediaUrl = await getMediaUrl(message.document.id);
-                console.log('Document URL:', mediaUrl ? 'Retrieved' : 'Failed to retrieve');
+                mediaUrl = await downloadAndUploadMedia(message.document.id, 'document');
               }
               break;
 
@@ -145,8 +211,7 @@ serve(async (req) => {
               type = 'audio';
               content = '[Voice Message]';
               if (message.audio?.id) {
-                mediaUrl = await getMediaUrl(message.audio.id);
-                console.log('Audio URL:', mediaUrl ? 'Retrieved' : 'Failed to retrieve');
+                mediaUrl = await downloadAndUploadMedia(message.audio.id, 'audio');
               }
               break;
 
@@ -154,8 +219,15 @@ serve(async (req) => {
               type = 'video';
               content = '[Video]';
               if (message.video?.id) {
-                mediaUrl = await getMediaUrl(message.video.id);
-                console.log('Video URL:', mediaUrl ? 'Retrieved' : 'Failed to retrieve');
+                mediaUrl = await downloadAndUploadMedia(message.video.id, 'video');
+              }
+              break;
+
+            case 'sticker':
+              type = 'image';
+              content = '[Sticker]';
+              if (message.sticker?.id) {
+                mediaUrl = await downloadAndUploadMedia(message.sticker.id, 'sticker');
               }
               break;
 
@@ -170,88 +242,57 @@ serve(async (req) => {
             .select('id, user_id, name')
             .eq('phone', from);
 
+          let targetUserId = userId || settingsUserId;
+          let contactId = null;
+
           if (contacts && contacts.length > 0) {
-            for (const contact of contacts) {
-              // Insert message with media URL
-              const { error } = await supabase.from('messages').insert({
-                user_id: contact.user_id,
-                contact_id: contact.id,
-                content,
-                type,
-                status: 'delivered',
-                is_outgoing: false,
-                media_url: mediaUrl,
-                whatsapp_message_id: messageId,
-              });
+            // Use existing contact
+            contactId = contacts[0].id;
+            targetUserId = contacts[0].user_id;
 
-              if (error) {
-                console.error('Insert message error:', error);
-              } else {
-                console.log('✅ Message inserted:', {
-                  contact: contact.id,
-                  type,
-                  hasMedia: !!mediaUrl,
-                  content: content.substring(0, 50)
-                });
-              }
+            // Update online status
+            await supabase.from('contacts').update({
+              last_seen: new Date().toISOString(),
+              is_online: true,
+            }).eq('id', contactId);
 
-              // Update contact online status
-              await supabase.from('contacts').update({
-                last_seen: new Date().toISOString(),
-                is_online: true,
-              }).eq('id', contact.id);
+          } else if (targetUserId) {
+            // Auto-create contact
+            console.log('👤 Auto-creating contact for:', from);
+            const contactName = value.contacts?.[0]?.profile?.name || from;
+
+            const { data: newContact, error: createError } = await supabase.from('contacts').insert({
+              user_id: targetUserId,
+              name: contactName,
+              phone: from,
+              loan_id: `WA-${Date.now()}`,
+              last_seen: new Date().toISOString(),
+              is_online: true,
+            }).select().single();
+
+            if (!createError && newContact) {
+              contactId = newContact.id;
+              console.log('✅ Contact created:', contactId);
             }
-          } else {
-            // AUTO-CREATE CONTACT for unknown numbers
-            let targetUserId = userId;
+          }
 
-            if (!targetUserId) {
-              const { data: allSettings } = await supabase
-                .from('whatsapp_settings')
-                .select('user_id')
-                .eq('is_connected', true)
-                .limit(1);
-              if (allSettings && allSettings.length > 0) {
-                targetUserId = allSettings[0].user_id;
-              }
-            }
+          // Insert message
+          if (contactId && targetUserId) {
+            const { error: msgError } = await supabase.from('messages').insert({
+              user_id: targetUserId,
+              contact_id: contactId,
+              content,
+              type,
+              status: 'delivered',
+              is_outgoing: false,
+              media_url: mediaUrl,
+              whatsapp_message_id: messageId,
+            });
 
-            if (targetUserId) {
-              console.log('Auto-creating contact for phone:', from);
-
-              const contactName = value.contacts?.[0]?.profile?.name || from;
-
-              const { data: newContact, error: createError } = await supabase.from('contacts').insert({
-                user_id: targetUserId,
-                name: contactName,
-                phone: from,
-                loan_id: `WA-${Date.now()}`,
-                last_seen: new Date().toISOString(),
-                is_online: true,
-              }).select().single();
-
-              if (createError) {
-                console.error('Auto-create contact error:', createError);
-              } else if (newContact) {
-                console.log('Contact auto-created:', newContact.id);
-
-                const { error: msgError } = await supabase.from('messages').insert({
-                  user_id: targetUserId,
-                  contact_id: newContact.id,
-                  content,
-                  type,
-                  status: 'delivered',
-                  is_outgoing: false,
-                  media_url: mediaUrl,
-                  whatsapp_message_id: messageId,
-                });
-
-                if (msgError) {
-                  console.error('Insert message for new contact error:', msgError);
-                } else {
-                  console.log('✅ Message inserted for new contact');
-                }
-              }
+            if (msgError) {
+              console.error('❌ Insert message error:', msgError);
+            } else {
+              console.log('✅ Message saved:', { type, hasMedia: !!mediaUrl, content: content.substring(0, 30) });
             }
           }
         }
@@ -262,18 +303,13 @@ serve(async (req) => {
         for (const status of value.statuses) {
           const waMessageId = status.id;
           const newStatus = status.status;
-          console.log('Status update:', waMessageId, '->', newStatus);
 
-          const { error } = await supabase
+          await supabase
             .from('messages')
             .update({ status: newStatus })
             .eq('whatsapp_message_id', waMessageId);
 
-          if (error) {
-            console.error('Status update error:', error);
-          } else {
-            console.log('✅ Status updated');
-          }
+          console.log('✅ Status updated:', newStatus);
         }
       }
 
