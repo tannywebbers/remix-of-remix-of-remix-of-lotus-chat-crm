@@ -99,7 +99,7 @@ export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
             isActive && 'bg-accent'
           )}
         >
-          <ContactAvatar name={contact.name} avatar={contact.avatar} isOnline={contact.isOnline} size="md" />
+          <ContactAvatar name={contact.name} avatar={contact.avatar} isOnline={contact.isOnline} lastSeen={contact.lastSeen} size="md" />
           
           <div className="flex-1 min-w-0 border-b border-panel-border pb-[10px]">
             <div className="flex items-center justify-between">
