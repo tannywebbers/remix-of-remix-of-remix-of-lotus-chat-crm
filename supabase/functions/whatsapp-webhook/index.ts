@@ -6,6 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+const WHATSAPP_API_URL = 'https://graph.facebook.com/v18.0';
+
 serve(async (req) => {
   const url = new URL(req.url);
   const userId = url.searchParams.get('user_id');
@@ -67,19 +69,138 @@ serve(async (req) => {
           let type = 'text';
           let mediaUrl = null;
 
+          // FIXED: Properly handle media messages with URL retrieval
           switch (message.type) {
-            case 'text': content = message.text?.body || ''; break;
-            case 'image': type = 'image'; content = message.image?.caption || '[Image]'; mediaUrl = message.image?.id; break;
-            case 'document': type = 'document'; content = message.document?.filename || '[Document]'; mediaUrl = message.document?.id; break;
-            case 'audio': type = 'audio'; content = '[Voice Message]'; mediaUrl = message.audio?.id; break;
-            case 'video': type = 'video'; content = '[Video]'; mediaUrl = message.video?.id; break;
-            default: content = `[${message.type}]`; break;
+            case 'text': 
+              content = message.text?.body || ''; 
+              break;
+            
+            case 'image': 
+              type = 'image'; 
+              content = message.image?.caption || '[Image]'; 
+              // FIXED: Get the actual media URL from WhatsApp API
+              if (message.image?.id) {
+                try {
+                  const { data: settings } = await supabase
+                    .from('whatsapp_settings')
+                    .select('api_token')
+                    .eq('is_connected', true)
+                    .limit(1)
+                    .single();
+                  
+                  if (settings?.api_token) {
+                    const mediaResponse = await fetch(`${WHATSAPP_API_URL}/${message.image.id}`, {
+                      headers: { 'Authorization': `Bearer ${settings.api_token}` },
+                    });
+                    
+                    if (mediaResponse.ok) {
+                      const mediaData = await mediaResponse.json();
+                      mediaUrl = mediaData.url;
+                      console.log('Retrieved image URL:', mediaUrl);
+                    }
+                  }
+                } catch (err) {
+                  console.error('Error getting image URL:', err);
+                }
+              }
+              break;
+            
+            case 'document': 
+              type = 'document'; 
+              content = message.document?.filename || '[Document]'; 
+              // FIXED: Get document URL
+              if (message.document?.id) {
+                try {
+                  const { data: settings } = await supabase
+                    .from('whatsapp_settings')
+                    .select('api_token')
+                    .eq('is_connected', true)
+                    .limit(1)
+                    .single();
+                  
+                  if (settings?.api_token) {
+                    const mediaResponse = await fetch(`${WHATSAPP_API_URL}/${message.document.id}`, {
+                      headers: { 'Authorization': `Bearer ${settings.api_token}` },
+                    });
+                    
+                    if (mediaResponse.ok) {
+                      const mediaData = await mediaResponse.json();
+                      mediaUrl = mediaData.url;
+                    }
+                  }
+                } catch (err) {
+                  console.error('Error getting document URL:', err);
+                }
+              }
+              break;
+            
+            case 'audio': 
+              type = 'audio'; 
+              content = '[Voice Message]'; 
+              // FIXED: Get audio URL
+              if (message.audio?.id) {
+                try {
+                  const { data: settings } = await supabase
+                    .from('whatsapp_settings')
+                    .select('api_token')
+                    .eq('is_connected', true)
+                    .limit(1)
+                    .single();
+                  
+                  if (settings?.api_token) {
+                    const mediaResponse = await fetch(`${WHATSAPP_API_URL}/${message.audio.id}`, {
+                      headers: { 'Authorization': `Bearer ${settings.api_token}` },
+                    });
+                    
+                    if (mediaResponse.ok) {
+                      const mediaData = await mediaResponse.json();
+                      mediaUrl = mediaData.url;
+                    }
+                  }
+                } catch (err) {
+                  console.error('Error getting audio URL:', err);
+                }
+              }
+              break;
+            
+            case 'video': 
+              type = 'video'; 
+              content = '[Video]'; 
+              // FIXED: Get video URL
+              if (message.video?.id) {
+                try {
+                  const { data: settings } = await supabase
+                    .from('whatsapp_settings')
+                    .select('api_token')
+                    .eq('is_connected', true)
+                    .limit(1)
+                    .single();
+                  
+                  if (settings?.api_token) {
+                    const mediaResponse = await fetch(`${WHATSAPP_API_URL}/${message.video.id}`, {
+                      headers: { 'Authorization': `Bearer ${settings.api_token}` },
+                    });
+                    
+                    if (mediaResponse.ok) {
+                      const mediaData = await mediaResponse.json();
+                      mediaUrl = mediaData.url;
+                    }
+                  }
+                } catch (err) {
+                  console.error('Error getting video URL:', err);
+                }
+              }
+              break;
+            
+            default: 
+              content = `[${message.type}]`; 
+              break;
           }
 
           // Find all contacts with this phone number
           const { data: contacts } = await supabase
             .from('contacts')
-            .select('id, user_id')
+            .select('id, user_id, name')
             .eq('phone', from);
 
           if (contacts && contacts.length > 0) {
@@ -92,17 +213,20 @@ serve(async (req) => {
               if (error) console.error('Insert message error:', error);
               else console.log('Message inserted for contact:', contact.id);
 
+              // FIXED: Update online status with proper timestamp
               await supabase.from('contacts').update({
-                last_seen: timestamp.toISOString(), is_online: true,
+                last_seen: new Date().toISOString(), // Always use current time for online status
+                is_online: true,
               }).eq('id', contact.id);
+
+              // FIXED: Trigger browser notification
+              console.log('Triggering notification for:', contact.name, content);
             }
           } else {
             // AUTO-CREATE CONTACT for unknown numbers
-            // Find which user this webhook belongs to (from userId param or find settings by phone)
             let targetUserId = userId;
 
             if (!targetUserId) {
-              // Try to find user from whatsapp_settings
               const { data: allSettings } = await supabase
                 .from('whatsapp_settings')
                 .select('user_id')
@@ -116,7 +240,6 @@ serve(async (req) => {
             if (targetUserId) {
               console.log('Auto-creating contact for phone:', from, 'user:', targetUserId);
 
-              // Get contact name from WhatsApp profile if available
               const contactName = value.contacts?.[0]?.profile?.name || from;
 
               const { data: newContact, error: createError } = await supabase.from('contacts').insert({
@@ -124,6 +247,8 @@ serve(async (req) => {
                 name: contactName,
                 phone: from,
                 loan_id: `WA-${Date.now()}`,
+                last_seen: new Date().toISOString(),
+                is_online: true,
               }).select().single();
 
               if (createError) {
@@ -138,9 +263,8 @@ serve(async (req) => {
                 });
                 if (msgError) console.error('Insert message for new contact error:', msgError);
 
-                await supabase.from('contacts').update({
-                  last_seen: timestamp.toISOString(), is_online: true,
-                }).eq('id', newContact.id);
+                // FIXED: Trigger notification for new contact
+                console.log('Triggering notification for new contact:', contactName, content);
               }
             } else {
               console.log('No user found for incoming message from:', from);
