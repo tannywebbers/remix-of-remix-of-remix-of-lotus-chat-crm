@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, MoreVertical, Phone, Video, Info, ArrowLeft, Trash2, Pin, BellOff, Archive, X, MessageCircle, AlertTriangle, Star } from 'lucide-react';
+import { Send, MoreVertical, Phone, Video, Info, ArrowLeft, Trash2, Pin, BellOff, Archive, X, MessageCircle, AlertTriangle, Star, Clipboard } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
@@ -55,12 +55,11 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     }
   }, [activeChat?.id]);
 
-  // FIXED: New function to mark messages as read in the database
+  // FIXED: Mark incoming messages as read in database
   const markMessagesAsRead = async () => {
     if (!activeChat || !user) return;
 
     try {
-      // Update all unread incoming messages to 'read' status
       const { error } = await supabase
         .from('messages')
         .update({ status: 'read' })
@@ -68,9 +67,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         .eq('is_outgoing', false)
         .neq('status', 'read');
 
-      if (error) {
-        console.error('Error marking messages as read:', error);
-      }
+      if (error) console.error('Error marking messages as read:', error);
     } catch (error) {
       console.error('Error marking messages as read:', error);
     }
