@@ -69,131 +69,86 @@ serve(async (req) => {
           let type = 'text';
           let mediaUrl = null;
 
-          // FIXED: Properly handle media messages with URL retrieval
+          // Helper function to get media URL from WhatsApp
+          const getMediaUrl = async (mediaId: string): Promise<string | null> => {
+            try {
+              // Get token from whatsapp_settings
+              const { data: settings } = await supabase
+                .from('whatsapp_settings')
+                .select('api_token')
+                .eq('is_connected', true)
+                .limit(1)
+                .single();
+              
+              if (!settings?.api_token) {
+                console.error('No WhatsApp API token found');
+                return null;
+              }
+
+              // Get media info from WhatsApp
+              const mediaInfoResponse = await fetch(`${WHATSAPP_API_URL}/${mediaId}`, {
+                headers: { 'Authorization': `Bearer ${settings.api_token}` },
+              });
+              
+              if (!mediaInfoResponse.ok) {
+                console.error('Failed to get media info:', await mediaInfoResponse.text());
+                return null;
+              }
+
+              const mediaInfo = await mediaInfoResponse.json();
+              console.log('Media info retrieved:', mediaInfo.url ? 'URL found' : 'No URL');
+              
+              return mediaInfo.url || null;
+            } catch (err) {
+              console.error('Error getting media URL:', err);
+              return null;
+            }
+          };
+
+          // FIXED: Handle all media types properly
           switch (message.type) {
-            case 'text': 
-              content = message.text?.body || ''; 
+            case 'text':
+              content = message.text?.body || '';
               break;
-            
-            case 'image': 
-              type = 'image'; 
-              content = message.image?.caption || '[Image]'; 
-              // FIXED: Get the actual media URL from WhatsApp API
+
+            case 'image':
+              type = 'image';
+              content = message.image?.caption || '[Image]';
               if (message.image?.id) {
-                try {
-                  const { data: settings } = await supabase
-                    .from('whatsapp_settings')
-                    .select('api_token')
-                    .eq('is_connected', true)
-                    .limit(1)
-                    .single();
-                  
-                  if (settings?.api_token) {
-                    const mediaResponse = await fetch(`${WHATSAPP_API_URL}/${message.image.id}`, {
-                      headers: { 'Authorization': `Bearer ${settings.api_token}` },
-                    });
-                    
-                    if (mediaResponse.ok) {
-                      const mediaData = await mediaResponse.json();
-                      mediaUrl = mediaData.url;
-                      console.log('Retrieved image URL:', mediaUrl);
-                    }
-                  }
-                } catch (err) {
-                  console.error('Error getting image URL:', err);
-                }
+                mediaUrl = await getMediaUrl(message.image.id);
+                console.log('Image URL:', mediaUrl ? 'Retrieved' : 'Failed');
               }
               break;
-            
-            case 'document': 
-              type = 'document'; 
-              content = message.document?.filename || '[Document]'; 
-              // FIXED: Get document URL
+
+            case 'document':
+              type = 'document';
+              content = message.document?.filename || '[Document]';
               if (message.document?.id) {
-                try {
-                  const { data: settings } = await supabase
-                    .from('whatsapp_settings')
-                    .select('api_token')
-                    .eq('is_connected', true)
-                    .limit(1)
-                    .single();
-                  
-                  if (settings?.api_token) {
-                    const mediaResponse = await fetch(`${WHATSAPP_API_URL}/${message.document.id}`, {
-                      headers: { 'Authorization': `Bearer ${settings.api_token}` },
-                    });
-                    
-                    if (mediaResponse.ok) {
-                      const mediaData = await mediaResponse.json();
-                      mediaUrl = mediaData.url;
-                    }
-                  }
-                } catch (err) {
-                  console.error('Error getting document URL:', err);
-                }
+                mediaUrl = await getMediaUrl(message.document.id);
+                console.log('Document URL:', mediaUrl ? 'Retrieved' : 'Failed');
               }
               break;
-            
-            case 'audio': 
-              type = 'audio'; 
-              content = '[Voice Message]'; 
-              // FIXED: Get audio URL
+
+            case 'audio':
+              type = 'audio';
+              content = '[Voice Message]';
               if (message.audio?.id) {
-                try {
-                  const { data: settings } = await supabase
-                    .from('whatsapp_settings')
-                    .select('api_token')
-                    .eq('is_connected', true)
-                    .limit(1)
-                    .single();
-                  
-                  if (settings?.api_token) {
-                    const mediaResponse = await fetch(`${WHATSAPP_API_URL}/${message.audio.id}`, {
-                      headers: { 'Authorization': `Bearer ${settings.api_token}` },
-                    });
-                    
-                    if (mediaResponse.ok) {
-                      const mediaData = await mediaResponse.json();
-                      mediaUrl = mediaData.url;
-                    }
-                  }
-                } catch (err) {
-                  console.error('Error getting audio URL:', err);
-                }
+                mediaUrl = await getMediaUrl(message.audio.id);
+                console.log('Audio URL:', mediaUrl ? 'Retrieved' : 'Failed');
               }
               break;
-            
-            case 'video': 
-              type = 'video'; 
-              content = '[Video]'; 
-              // FIXED: Get video URL
+
+            case 'video':
+              type = 'video';
+              content = '[Video]';
               if (message.video?.id) {
-                try {
-                  const { data: settings } = await supabase
-                    .from('whatsapp_settings')
-                    .select('api_token')
-                    .eq('is_connected', true)
-                    .limit(1)
-                    .single();
-                  
-                  if (settings?.api_token) {
-                    const mediaResponse = await fetch(`${WHATSAPP_API_URL}/${message.video.id}`, {
-                      headers: { 'Authorization': `Bearer ${settings.api_token}` },
-                    });
-                    
-                    if (mediaResponse.ok) {
-                      const mediaData = await mediaResponse.json();
-                      mediaUrl = mediaData.url;
-                    }
-                  }
-                } catch (err) {
-                  console.error('Error getting video URL:', err);
-                }
+                mediaUrl = await getMediaUrl(message.video.id);
+                console.log('Video URL:', mediaUrl ? 'Retrieved' : 'Failed');
               }
               break;
-            
-            default: 
-              content = `[${message.type}]`; 
+
+            default:
+              content = `[${message.type}]`;
               break;
           }
 
@@ -205,22 +160,29 @@ serve(async (req) => {
 
           if (contacts && contacts.length > 0) {
             for (const contact of contacts) {
+              // Insert message
               const { error } = await supabase.from('messages').insert({
-                user_id: contact.user_id, contact_id: contact.id,
-                content, type, status: 'delivered', is_outgoing: false,
-                media_url: mediaUrl, whatsapp_message_id: messageId,
+                user_id: contact.user_id,
+                contact_id: contact.id,
+                content,
+                type,
+                status: 'delivered',
+                is_outgoing: false,
+                media_url: mediaUrl,
+                whatsapp_message_id: messageId,
               });
-              if (error) console.error('Insert message error:', error);
-              else console.log('Message inserted for contact:', contact.id);
 
-              // FIXED: Update online status with proper timestamp
+              if (error) {
+                console.error('Insert message error:', error);
+              } else {
+                console.log('Message inserted for contact:', contact.id, 'Type:', type, 'Has media:', !!mediaUrl);
+              }
+
+              // Update contact online status
               await supabase.from('contacts').update({
-                last_seen: new Date().toISOString(), // Always use current time for online status
+                last_seen: new Date().toISOString(),
                 is_online: true,
               }).eq('id', contact.id);
-
-              // FIXED: Trigger browser notification
-              console.log('Triggering notification for:', contact.name, content);
             }
           } else {
             // AUTO-CREATE CONTACT for unknown numbers
@@ -238,7 +200,7 @@ serve(async (req) => {
             }
 
             if (targetUserId) {
-              console.log('Auto-creating contact for phone:', from, 'user:', targetUserId);
+              console.log('Auto-creating contact for phone:', from);
 
               const contactName = value.contacts?.[0]?.profile?.name || from;
 
@@ -257,14 +219,17 @@ serve(async (req) => {
                 console.log('Contact auto-created:', newContact.id);
 
                 const { error: msgError } = await supabase.from('messages').insert({
-                  user_id: targetUserId, contact_id: newContact.id,
-                  content, type, status: 'delivered', is_outgoing: false,
-                  media_url: mediaUrl, whatsapp_message_id: messageId,
+                  user_id: targetUserId,
+                  contact_id: newContact.id,
+                  content,
+                  type,
+                  status: 'delivered',
+                  is_outgoing: false,
+                  media_url: mediaUrl,
+                  whatsapp_message_id: messageId,
                 });
-                if (msgError) console.error('Insert message for new contact error:', msgError);
 
-                // FIXED: Trigger notification for new contact
-                console.log('Triggering notification for new contact:', contactName, content);
+                if (msgError) console.error('Insert message for new contact error:', msgError);
               }
             } else {
               console.log('No user found for incoming message from:', from);
@@ -277,7 +242,7 @@ serve(async (req) => {
       if (value.statuses?.length > 0) {
         for (const status of value.statuses) {
           const waMessageId = status.id;
-          const newStatus = status.status; // sent, delivered, read, failed
+          const newStatus = status.status;
           console.log('Status update:', waMessageId, '->', newStatus);
 
           const { error } = await supabase
@@ -285,8 +250,11 @@ serve(async (req) => {
             .update({ status: newStatus })
             .eq('whatsapp_message_id', waMessageId);
 
-          if (error) console.error('Status update error:', error);
-          else console.log('Status updated:', waMessageId, newStatus);
+          if (error) {
+            console.error('Status update error:', error);
+          } else {
+            console.log('Status updated:', waMessageId, newStatus);
+          }
         }
       }
 
