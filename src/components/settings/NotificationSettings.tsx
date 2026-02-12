@@ -62,8 +62,13 @@ export function NotificationSettings() {
     }
 
     setRequesting(true);
+    
+    // FIXED: Better error handling for notification permission request
     try {
+      // Request permission
       const permission = await Notification.requestPermission();
+      
+      // Update settings based on permission result
       const newSettings = {
         ...settings,
         permission,
@@ -71,23 +76,54 @@ export function NotificationSettings() {
       };
       saveSettings(newSettings);
 
+      // Show appropriate feedback
       if (permission === 'granted') {
-        toast({ title: 'Notifications enabled' });
-        // Show test notification
-        new Notification('Lotus CRM', {
-          body: 'Notifications are now enabled!',
-          icon: '/pwa-192x192.png',
+        toast({ 
+          title: 'Notifications enabled',
+          description: 'You will now receive notifications for new messages'
         });
+        
+        // Show test notification
+        try {
+          new Notification('Lotus CRM', {
+            body: 'Notifications are now enabled!',
+            icon: '/pwa-192x192.png',
+          });
+        } catch (notifError) {
+          console.error('Error showing test notification:', notifError);
+          // Don't show error to user - permission was granted successfully
+        }
       } else if (permission === 'denied') {
         toast({ 
           title: 'Notifications blocked', 
           description: 'Please enable notifications in your browser settings',
           variant: 'destructive' 
         });
+      } else {
+        // Permission was dismissed/default
+        toast({ 
+          title: 'Notification permission not granted',
+          description: 'You can enable notifications later from settings',
+        });
       }
     } catch (error) {
+      // FIXED: Only show error for actual errors, not for user dismissal
       console.error('Error requesting notification permission:', error);
-      toast({ title: 'Error enabling notifications', variant: 'destructive' });
+      
+      // Check if it's a real error or just user dismissal
+      if (error instanceof Error) {
+        toast({ 
+          title: 'Error enabling notifications', 
+          description: 'Please try again or check your browser settings',
+          variant: 'destructive' 
+        });
+      } else {
+        // User likely dismissed the prompt
+        toast({ 
+          title: 'Notification permission not granted',
+          description: 'You can enable notifications later from settings',
+        });
+      }
     } finally {
       setRequesting(false);
     }
@@ -155,9 +191,18 @@ export function NotificationSettings() {
 
           {settings.permission === 'denied' && (
             <div className="p-4 bg-destructive/10 rounded-lg">
-              <p className="text-sm text-destructive">
-                Notifications are blocked. Please enable them in your browser settings to receive alerts.
+              <p className="text-sm text-destructive font-medium mb-2">
+                Notifications are blocked
               </p>
+              <p className="text-sm text-muted-foreground">
+                To enable notifications, you need to:
+              </p>
+              <ol className="text-sm text-muted-foreground list-decimal list-inside mt-2 space-y-1">
+                <li>Click the lock icon in your browser's address bar</li>
+                <li>Find "Notifications" in the permissions list</li>
+                <li>Change it from "Block" to "Allow"</li>
+                <li>Reload this page</li>
+              </ol>
             </div>
           )}
 
