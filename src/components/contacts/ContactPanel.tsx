@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { ContactAvatar } from '@/components/shared/ContactAvatar';
 import { Button } from '@/components/ui/button';
 import { formatCurrency, formatLastSeen } from '@/lib/utils/format';
+import { isContactOnline } from '@/lib/utils/presence';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 
@@ -45,10 +46,10 @@ export function ContactPanel() {
       <div className="flex-1 overflow-y-auto custom-scrollbar">
         {/* Profile */}
         <div className="flex flex-col items-center py-8 px-4 bg-panel-header/50">
-          <ContactAvatar name={contact.name} avatar={contact.avatar} isOnline={contact.isOnline} size="lg" />
+          <ContactAvatar name={contact.name} avatar={contact.avatar} isOnline={contact.isOnline} lastSeen={contact.lastSeen} size="lg" />
           <h2 className="mt-4 text-xl font-medium">{contact.name}</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            {contact.isOnline ? 'Online' : contact.lastSeen ? formatLastSeen(contact.lastSeen) : 'Offline'}
+            {isContactOnline(contact.lastSeen) ? 'Online' : contact.lastSeen ? formatLastSeen(contact.lastSeen) : 'Offline'}
           </p>
         </div>
 

@@ -14,6 +14,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { formatLastSeen } from '@/lib/utils/format';
+import { isContactOnline } from '@/lib/utils/presence';
 import { Message } from '@/types';
 import { useToast } from '@/hooks/use-toast';
 import { getWhatsAppErrorExplanation } from '@/lib/whatsappErrors';
@@ -304,11 +305,11 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
             className="flex items-center gap-2.5 hover:bg-accent/50 rounded-lg p-1 transition-colors min-w-0"
             onClick={() => setShowContactPanel(true)}
           >
-            <ContactAvatar name={contact.name} avatar={contact.avatar} isOnline={contact.isOnline} size="sm" />
+            <ContactAvatar name={contact.name} avatar={contact.avatar} isOnline={contact.isOnline} lastSeen={contact.lastSeen} size="sm" />
             <div className="text-left min-w-0">
               <h2 className="font-semibold text-[17px] truncate leading-tight">{contact.name}</h2>
               <p className="text-[12px] text-muted-foreground leading-tight">
-                {contact.isOnline ? 'online' : contact.lastSeen ? formatLastSeen(contact.lastSeen) : 'tap here for contact info'}
+                {isContactOnline(contact.lastSeen) ? 'online' : contact.lastSeen ? formatLastSeen(contact.lastSeen) : 'tap here for contact info'}
               </p>
             </div>
           </button>
@@ -363,8 +364,12 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       {/* Input Bar */}
       <div className="px-2 sm:px-3 py-2 bg-panel-header border-t border-panel-border shrink-0">
         <div className="flex items-center gap-1 max-w-3xl mx-auto">
-          <FileUploadButton onFileSelect={(file, type) => handleFileUpload(file, type)} uploading={uploading} />
-          <TemplateSelector contact={contact as any} onSelectTemplate={handleTemplateSelect} />
+          {!isRecording && (
+            <>
+              <FileUploadButton onFileSelect={(file, type) => handleFileUpload(file, type)} uploading={uploading} />
+              <TemplateSelector contact={contact as any} onSelectTemplate={handleTemplateSelect} />
+            </>
+          )}
 
           {isRecording ? (
             <VoiceRecorder isRecording={isRecording} setIsRecording={setIsRecording} onRecordingComplete={handleVoiceRecording} onCancel={() => setIsRecording(false)} />
@@ -385,7 +390,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                   <Send className="h-[18px] w-[18px]" />
                 </Button>
               ) : (
-                <VoiceRecorder isRecording={isRecording} setIsRecording={setIsRecording} onRecordingComplete={handleVoiceRecording} onCancel={() => setIsRecording(false)} />
+                <VoiceRecorder isRecording={false} setIsRecording={setIsRecording} onRecordingComplete={handleVoiceRecording} onCancel={() => setIsRecording(false)} />
               )}
             </>
           )}

@@ -189,6 +189,33 @@ export type Database = {
         }
         Relationships: []
       }
+      template_mappings: {
+        Row: {
+          created_at: string
+          id: string
+          mapped_field: string
+          template_name: string
+          user_id: string
+          variable_number: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mapped_field: string
+          template_name: string
+          user_id: string
+          variable_number: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mapped_field?: string
+          template_name?: string
+          user_id?: string
+          variable_number?: number
+        }
+        Relationships: []
+      }
       whatsapp_settings: {
         Row: {
           api_token: string | null

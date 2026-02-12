@@ -66,7 +66,7 @@ export function VoiceRecorder({ onRecordingComplete, onCancel, isRecording, setI
       mediaRecorderRef.current.stop();
     }
     if (timerRef.current) clearInterval(timerRef.current);
-    setIsRecording(false);
+    // Keep isRecording true so ChatView hides text input during preview
   };
 
   const cancelAll = () => {
@@ -87,6 +87,7 @@ export function VoiceRecorder({ onRecordingComplete, onCancel, isRecording, setI
       onRecordingComplete(recorded);
       setRecorded(null);
       setPreviewUrl(null);
+      setIsRecording(false);
     }
   };
 

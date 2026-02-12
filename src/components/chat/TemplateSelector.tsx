@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { FileText, Search, X } from 'lucide-react';
+import { FileText, Search, X, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
@@ -17,8 +17,27 @@ interface TemplateSelectorProps {
   onSelectTemplate: (template: Template, params: Record<string, string>) => void;
 }
 
-// Variable mapping: named variables → contact data
-function mapVariables(text: string, contact: TemplateSelectorProps['contact']): string {
+// Resolve a mapped field name to actual contact data
+function resolveField(field: string, contact: TemplateSelectorProps['contact']): string {
+  const paymentDetails = contact.accountDetails?.length
+    ? contact.accountDetails.map(a => `${a.bank} - ${a.accountNumber} (${a.accountName})`).join('; ')
+    : '';
+
+  switch (field) {
+    case 'customer_name': return contact.name;
+    case 'loan_id': return contact.loanId;
+    case 'amount': return contact.amount?.toString() || '';
+    case 'payment_details': return paymentDetails;
+    case 'app_name': return contact.appType || 'Tloan';
+    case 'due_date': return '';
+    case 'phone_number': return contact.phone;
+    case 'day_type': return contact.dayType?.toString() || '';
+    default: return '';
+  }
+}
+
+// Also support named variables like {{customer_name}} for backward compat
+function mapNamedVariables(text: string, contact: TemplateSelectorProps['contact']): string {
   const paymentDetails = contact.accountDetails?.length
     ? contact.accountDetails.map(a => `${a.bank} - ${a.accountNumber} (${a.accountName})`).join('; ')
     : '';
@@ -39,6 +58,8 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
   const [loading, setLoading] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [params, setParams] = useState<Record<string, string>>({});
+  const [mappings, setMappings] = useState<Record<number, string>>({});
+  const [unmappedVars, setUnmappedVars] = useState<number[]>([]);
 
   useEffect(() => { if (open && user) fetchTemplates(); }, [open, user]);
 
@@ -53,33 +74,77 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
     finally { setLoading(false); }
   };
 
-  const getDefaultParams = (template: Template) => {
-    const defaultParams: Record<string, string> = {};
-    const components = template.components || [];
-    components.forEach((comp: any) => {
-      if (comp.type === 'BODY' && comp.example?.body_text) {
-        comp.example.body_text[0]?.forEach((param: string, index: number) => {
-          const paramKey = `{{${index + 1}}}`;
-          const lower = param.toLowerCase();
-          if (lower.includes('name') || lower.includes('customer')) defaultParams[paramKey] = contact.name;
-          else if (lower.includes('loan') || lower.includes('id')) defaultParams[paramKey] = contact.loanId;
-          else if (lower.includes('amount')) defaultParams[paramKey] = contact.amount?.toString() || '';
-          else if (lower.includes('app')) defaultParams[paramKey] = contact.appType || 'Tloan';
-          else if (lower.includes('day')) defaultParams[paramKey] = contact.dayType?.toString() || '';
-          else if ((lower.includes('account') || lower.includes('payment')) && contact.accountDetails?.[0]) {
-            defaultParams[paramKey] = `${contact.accountDetails[0].bank} - ${contact.accountDetails[0].accountNumber} (${contact.accountDetails[0].accountName})`;
-          }
-          else defaultParams[paramKey] = param;
-        });
+  const handleSelectTemplate = async (template: Template) => {
+    setSelectedTemplate(template);
+
+    // Load mappings from database
+    if (!user) return;
+    const { data: mappingData } = await supabase
+      .from('template_mappings' as any)
+      .select('*')
+      .eq('user_id', user.id)
+      .eq('template_name', template.name);
+
+    const dbMappings: Record<number, string> = {};
+    ((mappingData as any[]) || []).forEach((m: any) => {
+      dbMappings[m.variable_number] = m.mapped_field;
+    });
+    setMappings(dbMappings);
+
+    // Extract variables from template body
+    const body = template.components?.find((c: any) => c.type === 'BODY');
+    const text = body?.text || '';
+    const varMatches: string[] = text.match(/\{\{(\d+)\}\}/g) || [];
+    const parsedNums = varMatches.map((m: string) => parseInt(m.replace(/[{}]/g, '')));
+    const varNums: number[] = parsedNums.filter((v, i, a) => a.indexOf(v) === i).sort((a, b) => a - b);
+
+    // Build params from mappings
+    const resolvedParams: Record<string, string> = {};
+    const unmapped: number[] = [];
+    varNums.forEach((num: number) => {
+      const field = dbMappings[num];
+      if (field) {
+        resolvedParams[`{{${num}}}`] = resolveField(field, contact);
+      } else {
+        resolvedParams[`{{${num}}}`] = '';
+        unmapped.push(num);
       }
     });
-    return defaultParams;
-  };
 
-  const handleSelectTemplate = (template: Template) => { setSelectedTemplate(template); setParams(getDefaultParams(template)); };
+    // Fallback: if no DB mappings exist, try example-based params
+    if (Object.keys(dbMappings).length === 0 && template.components) {
+      const components = template.components;
+      components.forEach((comp: any) => {
+        if (comp.type === 'BODY' && comp.example?.body_text) {
+          comp.example.body_text[0]?.forEach((param: string, index: number) => {
+            const paramKey = `{{${index + 1}}}`;
+            const lower = param.toLowerCase();
+            if (lower.includes('name') || lower.includes('customer')) resolvedParams[paramKey] = contact.name;
+            else if (lower.includes('loan') || lower.includes('id')) resolvedParams[paramKey] = contact.loanId;
+            else if (lower.includes('amount')) resolvedParams[paramKey] = contact.amount?.toString() || '';
+            else if (lower.includes('app')) resolvedParams[paramKey] = contact.appType || 'Tloan';
+            else if (lower.includes('day')) resolvedParams[paramKey] = contact.dayType?.toString() || '';
+            else if ((lower.includes('account') || lower.includes('payment')) && contact.accountDetails?.[0]) {
+              resolvedParams[paramKey] = `${contact.accountDetails[0].bank} - ${contact.accountDetails[0].accountNumber} (${contact.accountDetails[0].accountName})`;
+            }
+            else resolvedParams[paramKey] = param;
+          });
+        }
+      });
+    }
+
+    setParams(resolvedParams);
+    setUnmappedVars(unmapped);
+  };
   
   const handleConfirm = () => {
     if (selectedTemplate) {
+      // Block if there are unmapped variables with no values
+      const emptyParams = Object.entries(params).filter(([_, v]) => !v);
+      if (emptyParams.length > 0 && Object.keys(mappings).length > 0) {
+        // Only block if mappings exist but are incomplete
+        return;
+      }
       onSelectTemplate(selectedTemplate, params);
       setOpen(false);
       setSelectedTemplate(null);
@@ -91,10 +156,8 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
   const renderTemplatePreview = (template: Template) => {
     const body = template.components?.find((c: any) => c.type === 'BODY');
     let text = body?.text || 'No preview available';
-    // Replace numbered params
     Object.entries(params).forEach(([key, value]) => { text = text.replace(key, value || key); });
-    // Replace named variables
-    text = mapVariables(text, contact);
+    text = mapNamedVariables(text, contact);
     return text;
   };
 
@@ -151,6 +214,12 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
                   <Input value={value} onChange={(e) => setParams({ ...params, [key]: e.target.value })} placeholder={`Value for ${key}`} />
                 </div>
               ))}
+              {unmappedVars.length > 0 && Object.keys(mappings).length > 0 && (
+                <div className="flex items-center gap-2 text-destructive text-sm">
+                  <AlertCircle className="h-4 w-4" />
+                  <span>Variables {unmappedVars.map(v => `{{${v}}}`).join(', ')} not mapped. Go to Settings → Template Mapping.</span>
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setSelectedTemplate(null)}>Back</Button>

@@ -1,11 +1,13 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getInitials } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
+import { isContactOnline } from '@/lib/utils/presence';
 
 interface ContactAvatarProps {
   name: string;
   avatar?: string;
   isOnline?: boolean;
+  lastSeen?: Date;
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }
@@ -22,7 +24,10 @@ const statusSizeClasses = {
   lg: 'h-4 w-4 right-0.5 bottom-0.5',
 };
 
-export function ContactAvatar({ name, avatar, isOnline, size = 'md', className }: ContactAvatarProps) {
+export function ContactAvatar({ name, avatar, isOnline, lastSeen, size = 'md', className }: ContactAvatarProps) {
+  // Compute real presence from lastSeen threshold
+  const realOnline = isContactOnline(lastSeen, isOnline);
+
   return (
     <div className="relative">
       <Avatar className={cn(sizeClasses[size], 'bg-primary/10', className)}>
@@ -31,12 +36,12 @@ export function ContactAvatar({ name, avatar, isOnline, size = 'md', className }
           {getInitials(name)}
         </AvatarFallback>
       </Avatar>
-      {isOnline !== undefined && (
+      {(isOnline !== undefined || lastSeen !== undefined) && (
         <span
           className={cn(
             'absolute rounded-full border-2 border-background',
             statusSizeClasses[size],
-            isOnline ? 'bg-status-online' : 'bg-status-offline'
+            realOnline ? 'bg-status-online' : 'bg-status-offline'
           )}
         />
       )}
