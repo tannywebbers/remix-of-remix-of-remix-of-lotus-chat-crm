@@ -139,7 +139,9 @@
 
   body {
     @apply bg-background text-foreground antialiased;
+    /* UPDATED: San Francisco Pro with Roboto fallback + font-weight 350 */
     font-family: 'SF Pro Text', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI', Roboto, Arial, sans-serif;
+    font-weight: 350; /* Medium weight for entire app */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-tap-highlight-color: transparent;
@@ -158,21 +160,26 @@
 }
 
 @layer components {
-  /* Message Bubbles - WhatsApp iOS COMPACT */
+  /* UPDATED: Message Bubbles - iOS WhatsApp style with custom spacing */
   .message-bubble {
     @apply relative px-2 py-[5px] max-w-[65%] shadow-sm;
     border-radius: 8px;
     line-height: 1.25;
+    font-weight: 500; /* Medium-bold weight for chat messages */
   }
   
+  /* UPDATED: Outgoing messages (user sent) - 8px spacing */
   .message-bubble-outgoing {
     @apply bg-[hsl(var(--bubble-outgoing))] text-[hsl(var(--bubble-text))];
     border-bottom-right-radius: 4px;
+    margin-left: 8px; /* 8px left spacing for user messages */
   }
   
+  /* UPDATED: Incoming messages (contact sent) - 14px spacing */
   .message-bubble-incoming {
     @apply bg-[hsl(var(--bubble-incoming))] text-[hsl(var(--bubble-text))];
     border-bottom-left-radius: 4px;
+    margin-right: 14px; /* 14px right spacing for contact messages */
   }
   
   /* Chat Pattern Background */
