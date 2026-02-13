@@ -1,118 +1,87 @@
-// Add this to your main App.tsx or layout component
-
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppStore } from '@/store/appStore';
 
+// Notification sound — short beep encoded as data URI (no external file needed)
+const NOTIFICATION_SOUND_URL = 'data:audio/wav;base64,UklGRl4FAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YToFAACAgICAgICAgICAgICAgICAgICA/3+AgP9/gID/f4CAgICAgICAgICAgH+AgIB/gICAf4CAgH+AgIB/gICAgICAgICAgICAgICAgICAgP9/gID/f4CA/3+AgP9/gIB/gICAgICAgICAgICAgICAgICAgICA/3+AgP9/gID/f4CA/3+AgICAgICAgICAgICAgICAgICAgICAgICA/3+AgP9/gIB/gICAf4CAgH+AgIB/gICAgICAgICAgICAgICAgICA';
+
+let notificationAudio: HTMLAudioElement | null = null;
+
+function playNotificationSound() {
+  try {
+    const settingsJson = localStorage.getItem('notification_settings');
+    const settings = settingsJson ? JSON.parse(settingsJson) : { sound: true };
+    if (settings.sound === false) return;
+
+    if (!notificationAudio) {
+      notificationAudio = new Audio(NOTIFICATION_SOUND_URL);
+      notificationAudio.volume = 0.5;
+    }
+    notificationAudio.currentTime = 0;
+    notificationAudio.play().catch(() => {});
+  } catch {}
+}
+
 export function useMessageNotifications() {
   const { user } = useAuth();
-  const { activeChat, contacts, addMessage } = useAppStore();
+  const activeChatRef = useRef<string | null>(null);
+
+  // Keep ref in sync to avoid re-subscribing on chat change
+  useEffect(() => {
+    activeChatRef.current = useAppStore.getState().activeChat?.id || null;
+    const unsub = useAppStore.subscribe((state) => {
+      activeChatRef.current = state.activeChat?.id || null;
+    });
+    return unsub;
+  }, []);
 
   useEffect(() => {
     if (!user) return;
 
-    console.log('🔔 Notification listener started');
-
-    // Listen for new incoming messages
     const channel = supabase
-      .channel('realtime-messages')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          const message = payload.new as any;
-          console.log('📨 New message received:', message);
+      .channel('notification-messages')
+      .on('postgres_changes', {
+        event: 'INSERT', schema: 'public', table: 'messages',
+        filter: `user_id=eq.${user.id}`,
+      }, (payload) => {
+        const message = payload.new as any;
+        if (message.is_outgoing) return;
+        if (activeChatRef.current === message.contact_id) return;
 
-          // Don't notify for outgoing messages
-          if (message.is_outgoing) {
-            console.log('↗️ Outgoing message, skip notification');
-            return;
-          }
+        // Play sound
+        playNotificationSound();
 
-          // Don't notify if this is the active chat (user is already viewing it)
-          if (activeChat?.id === message.contact_id) {
-            console.log('👁️ Message in active chat, skip notification');
-            return;
-          }
+        // Browser notification
+        const settingsJson = localStorage.getItem('notification_settings');
+        let enabled = false;
+        let showPreview = true;
+        if (settingsJson) {
+          try {
+            const s = JSON.parse(settingsJson);
+            enabled = s.enabled && Notification.permission === 'granted';
+            showPreview = s.preview !== false;
+          } catch {}
+        }
 
-          // Get notification settings
-          const settingsJson = localStorage.getItem('notification_settings');
-          let enabled = false;
-          let showPreview = true;
-
-          if (settingsJson) {
-            try {
-              const settings = JSON.parse(settingsJson);
-              enabled = settings.enabled && Notification.permission === 'granted';
-              showPreview = settings.preview !== false;
-            } catch (e) {
-              console.error('Error parsing notification settings:', e);
-            }
-          }
-
-          // Find contact name
+        if (enabled && 'Notification' in window && Notification.permission === 'granted') {
+          const contacts = useAppStore.getState().contacts;
           const contact = contacts.find(c => c.id === message.contact_id);
           const contactName = contact?.name || 'Unknown Contact';
-          const messageContent = message.content || 'New message';
-
-          console.log('📬 Notification for:', contactName);
-
-          // Show browser notification
-          if (enabled && 'Notification' in window && Notification.permission === 'granted') {
-            try {
-              const notification = new Notification(contactName, {
-                body: showPreview ? messageContent : 'You have a new message',
-                icon: '/pwa-192x192.png',
-                badge: '/pwa-192x192.png',
-                tag: `message-${message.contact_id}`,
-                requireInteraction: false,
-                silent: false,
-              });
-
-              // Click to focus window
-              notification.onclick = () => {
-                window.focus();
-                notification.close();
-              };
-
-              // Auto close after 5 seconds
-              setTimeout(() => notification.close(), 5000);
-
-              console.log('✅ Notification shown');
-            } catch (error) {
-              console.error('❌ Notification error:', error);
-            }
-          } else {
-            console.log('🔕 Notifications disabled or not permitted');
-          }
+          try {
+            const n = new Notification(contactName, {
+              body: showPreview ? (message.content || 'New message') : 'You have a new message',
+              icon: '/pwa-192x192.png',
+              tag: `message-${message.contact_id}`,
+              silent: true, // We play our own sound
+            });
+            n.onclick = () => { window.focus(); n.close(); };
+            setTimeout(() => n.close(), 5000);
+          } catch {}
         }
-      )
-      .subscribe((status) => {
-        console.log('Realtime subscription status:', status);
-      });
+      })
+      .subscribe();
 
-    return () => {
-      console.log('🔕 Notification listener stopped');
-      supabase.removeChannel(channel);
-    };
-  }, [user, activeChat?.id, contacts]);
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
 }
-
-// Usage in your App.tsx or main layout:
-/*
-import { useMessageNotifications } from '@/hooks/useMessageNotifications';
-
-function App() {
-  useMessageNotifications(); // Add this line
-  
-  return (
-    // your app
-  );
-}
-*/

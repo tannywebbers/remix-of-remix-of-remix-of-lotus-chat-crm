@@ -15,7 +15,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const { content, isOutgoing, timestamp, status, type, mediaUrl } = message;
   const [mediaPreview, setMediaPreview] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
-  const [audioDuration, setAudioDuration] = useState('0:00');
+  const [audioDuration, setAudioDuration] = useState<string | null>(null);
   const [audioProgress, setAudioProgress] = useState(0);
   const audioRef = useRef<HTMLAudioElement>(null);
 
@@ -58,15 +58,33 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               : <Play className="h-5 w-5 text-primary ml-0.5" />
             }
           </button>
-          <div className="flex-1">
-            <div className="h-1 bg-primary/30 rounded-full overflow-hidden">
-              <div className="h-1 bg-primary rounded-full transition-all" style={{ width: `${audioProgress}%` }} />
-            </div>
+          <div className="flex-1 min-w-[100px]">
+            <input
+              type="range"
+              min={0}
+              max={100}
+              value={audioProgress}
+              onChange={(e) => {
+                if (audioRef.current && audioRef.current.duration) {
+                  const pct = Number(e.target.value);
+                  audioRef.current.currentTime = (pct / 100) * audioRef.current.duration;
+                  setAudioProgress(pct);
+                }
+              }}
+              className="w-full h-1 accent-primary cursor-pointer"
+            />
             <audio
               ref={audioRef}
               src={mediaUrl}
+              preload="metadata"
+              onLoadedMetadata={() => {
+                if (audioRef.current && isFinite(audioRef.current.duration)) {
+                  const secs = Math.floor(audioRef.current.duration);
+                  setAudioDuration(`${Math.floor(secs / 60)}:${(secs % 60).toString().padStart(2, '0')}`);
+                }
+              }}
               onTimeUpdate={() => {
-                if (audioRef.current) {
+                if (audioRef.current && isFinite(audioRef.current.duration)) {
                   setAudioProgress((audioRef.current.currentTime / audioRef.current.duration) * 100);
                   const secs = Math.floor(audioRef.current.currentTime);
                   setAudioDuration(`${Math.floor(secs / 60)}:${(secs % 60).toString().padStart(2, '0')}`);
@@ -76,7 +94,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               className="hidden"
             />
           </div>
-          <span className="text-xs text-muted-foreground">{audioDuration}</span>
+          <span className="text-xs text-muted-foreground whitespace-nowrap">{audioDuration ?? '⏳'}</span>
         </div>
       );
     }
