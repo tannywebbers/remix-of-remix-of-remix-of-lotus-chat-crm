@@ -168,7 +168,7 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
           <FileText className="h-5 w-5 text-muted-foreground" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[80vh]">
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden">
         <DialogHeader><DialogTitle>Send Template Message</DialogTitle></DialogHeader>
         {!selectedTemplate ? (
           <>
@@ -200,32 +200,36 @@ export function TemplateSelector({ contact, onSelectTemplate }: TemplateSelector
             </ScrollArea>
           </>
         ) : (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-medium">{selectedTemplate.name}</h3>
-              <Button variant="ghost" size="sm" onClick={() => setSelectedTemplate(null)}><X className="h-4 w-4" /></Button>
+          <ScrollArea className="max-h-[60vh]">
+            <div className="space-y-4 pr-2">
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium truncate">{selectedTemplate.name}</h3>
+                <Button variant="ghost" size="sm" onClick={() => setSelectedTemplate(null)}><X className="h-4 w-4" /></Button>
+              </div>
+              <div className="p-4 bg-muted rounded-lg overflow-hidden">
+                <p className="text-sm whitespace-pre-wrap break-words" style={{ overflowWrap: 'anywhere' }}>{renderTemplatePreview(selectedTemplate)}</p>
+              </div>
+              <div className="space-y-3">
+                <h4 className="text-sm font-medium">Template Parameters</h4>
+                {Object.entries(params).map(([key, value]) => (
+                  <div key={key} className="flex items-center gap-2">
+                    <span className="text-sm text-muted-foreground w-16 shrink-0">{key}</span>
+                    <Input value={value} onChange={(e) => setParams({ ...params, [key]: e.target.value })} placeholder={`Value for ${key}`} />
+                  </div>
+                ))}
+                {unmappedVars.length > 0 && Object.keys(mappings).length > 0 && (
+                  <div className="flex items-center gap-2 text-destructive text-sm">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    <span>Variables {unmappedVars.map(v => `{{${v}}}`).join(', ')} not mapped. Go to Settings → Template Mapping.</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setSelectedTemplate(null)}>Back</Button>
+                <Button onClick={handleConfirm}>Send Template</Button>
+              </div>
             </div>
-            <div className="p-4 bg-muted rounded-lg"><p className="text-sm whitespace-pre-wrap">{renderTemplatePreview(selectedTemplate)}</p></div>
-            <div className="space-y-3">
-              <h4 className="text-sm font-medium">Template Parameters</h4>
-              {Object.entries(params).map(([key, value]) => (
-                <div key={key} className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground w-16">{key}</span>
-                  <Input value={value} onChange={(e) => setParams({ ...params, [key]: e.target.value })} placeholder={`Value for ${key}`} />
-                </div>
-              ))}
-              {unmappedVars.length > 0 && Object.keys(mappings).length > 0 && (
-                <div className="flex items-center gap-2 text-destructive text-sm">
-                  <AlertCircle className="h-4 w-4" />
-                  <span>Variables {unmappedVars.map(v => `{{${v}}}`).join(', ')} not mapped. Go to Settings → Template Mapping.</span>
-                </div>
-              )}
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setSelectedTemplate(null)}>Back</Button>
-              <Button onClick={handleConfirm}>Send Template</Button>
-            </div>
-          </div>
+          </ScrollArea>
         )}
       </DialogContent>
     </Dialog>
