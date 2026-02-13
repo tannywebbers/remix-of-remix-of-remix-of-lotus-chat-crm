@@ -63,9 +63,11 @@ const Index = () => {
   if (loading && !dataLoaded) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-          <p className="text-muted-foreground">Loading your data...</p>
+        <div className="flex flex-col items-center gap-3 animate-fade-in">
+          <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          </div>
+          <p className="text-sm text-muted-foreground">Loading...</p>
         </div>
       </div>
     );

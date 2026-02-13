@@ -417,7 +417,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto chat-background px-3 py-2 custom-scrollbar min-h-0">
-        <div className="max-w-3xl mx-auto space-y-1">
+        <div className="max-w-[720px] mx-auto space-y-[2px]">
           {chatMessages.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               <p className="text-[14px]">No messages yet. Start the conversation!</p>
