@@ -22,16 +22,12 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
   const toggleAudio = () => {
     if (!audioRef.current) return;
-    if (audioPlaying) {
-      audioRef.current.pause();
-    } else {
-      audioRef.current.play();
-    }
+    if (audioPlaying) audioRef.current.pause();
+    else audioRef.current.play();
     setAudioPlaying(!audioPlaying);
   };
 
   const renderContent = () => {
-    // Sticker — clean transparent display
     if (isSticker && mediaUrl) {
       return (
         <img
@@ -53,7 +49,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             onClick={() => setMediaPreview(true)}
           />
           {content && content !== '[Image]' && (
-            <p className="text-[15px] sm:text-[14px] leading-[1.25] whitespace-pre-wrap break-words">{content}</p>
+            <p className="text-[15px] sm:text-[14px] leading-[1.25] whitespace-pre-wrap break-words">
+              {content}
+            </p>
           )}
         </div>
       );
@@ -71,6 +69,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               : <Play className="h-4 w-4 text-primary ml-0.5" />
             }
           </button>
+
           <div className="flex-1 min-w-[80px]">
             <input
               type="range"
@@ -86,6 +85,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               }}
               className="w-full h-1 accent-primary cursor-pointer"
             />
+
             <audio
               ref={audioRef}
               src={mediaUrl}
@@ -107,7 +107,10 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               className="hidden"
             />
           </div>
-          <span className="text-[11px] text-muted-foreground whitespace-nowrap">{audioDuration ?? '⏳'}</span>
+
+          <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+            {audioDuration ?? '⏳'}
+          </span>
         </div>
       );
     }
@@ -141,26 +144,30 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     }
 
     return (
-      <p className="text-[15px] sm:text-[14px] leading-[1.25] whitespace-pre-wrap break-words">{content}</p>
+      <p className="text-[15px] sm:text-[14px] leading-[1.25] whitespace-pre-wrap break-words">
+        {content}
+      </p>
     );
   };
 
   return (
     <>
-      <div className={cn('flex animate-message-in mb-[2px]', isOutgoing ? 'justify-end' : 'justify-start')}>
+      <div className={cn('flex animate-message-in', isOutgoing ? 'justify-end' : 'justify-start')}>
         <div className={cn(
           isSticker ? 'message-sticker' : 'message-bubble',
           !isSticker && (isOutgoing ? 'message-bubble-outgoing' : 'message-bubble-incoming')
         )}>
           {renderContent()}
+
           {!isSticker && (
-            <div className={cn('flex items-center gap-1 mt-0.5', isOutgoing ? 'justify-end' : 'justify-start')}>
+            <div className={cn('flex items-center gap-1 mt-2', isOutgoing ? 'justify-end' : 'justify-start')}>
               <span className="text-[11px] text-muted-foreground">{formatMessageTime(timestamp)}</span>
               {isOutgoing && <MessageStatus status={status} className="h-3.5 w-3.5" />}
             </div>
           )}
+
           {status === 'failed' && isOutgoing && (
-            <div className="flex items-center gap-1 mt-0.5 text-destructive">
+            <div className="flex items-center gap-1 mt-2 text-destructive">
               <AlertCircle className="h-3 w-3" />
               <span className="text-[11px]">Not sent</span>
             </div>
