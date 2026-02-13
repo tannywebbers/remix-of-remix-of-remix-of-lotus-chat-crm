@@ -148,6 +148,13 @@
     font-size: 15px;
     letter-spacing: -0.01em;
   }
+
+.message-spacing-container > .flex.justify-end + .flex.justify-start,
+.message-spacing-container > .flex.justify-start + .flex.justify-end {
+  margin-top: 14px !important;
+}
+
+
   
   /* Safe area for mobile */
   .pb-safe {
