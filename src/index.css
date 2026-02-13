@@ -2,8 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=SF+Pro+Display:wght@300;400;500;600;700;800&family=SF+Pro+Text:wght@300;400;500;600;700&display=swap');
-
 @layer base {
   :root {
     /* WhatsApp iOS Exact Colors */
@@ -141,11 +139,11 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', 'Helvetica Neue', 'Segoe UI', Roboto, sans-serif;
+    font-family: 'SF Pro Text', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI', Roboto, Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-tap-highlight-color: transparent;
-    font-size: 16px;
+    font-size: 15px;
     letter-spacing: -0.01em;
   }
   
@@ -160,17 +158,21 @@
 }
 
 @layer components {
-  /* Message Bubbles - WhatsApp iOS */
+  /* Message Bubbles - WhatsApp iOS COMPACT */
   .message-bubble {
-    @apply relative px-2.5 py-1.5 rounded-lg max-w-[80%] shadow-sm;
+    @apply relative px-2 py-[5px] max-w-[65%] shadow-sm;
+    border-radius: 8px;
+    line-height: 1.25;
   }
   
   .message-bubble-outgoing {
-    @apply bg-[hsl(var(--bubble-outgoing))] text-[hsl(var(--bubble-text))] rounded-br-[4px];
+    @apply bg-[hsl(var(--bubble-outgoing))] text-[hsl(var(--bubble-text))];
+    border-bottom-right-radius: 4px;
   }
   
   .message-bubble-incoming {
-    @apply bg-[hsl(var(--bubble-incoming))] text-[hsl(var(--bubble-text))] rounded-bl-[4px];
+    @apply bg-[hsl(var(--bubble-incoming))] text-[hsl(var(--bubble-text))];
+    border-bottom-left-radius: 4px;
   }
   
   /* Chat Pattern Background */
@@ -186,6 +188,13 @@
   
   .ios-settings-icon {
     @apply h-[30px] w-[30px] rounded-[7px] flex items-center justify-center shrink-0;
+  }
+
+  /* iOS Heavy Header */
+  .ios-header {
+    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.3px;
   }
 
   /* Scrollbar Styling */
@@ -208,6 +217,19 @@
   /* Theme transition */
   .theme-transition {
     transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+  }
+
+  /* Sticker message — transparent, no bubble */
+  .message-sticker {
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    max-width: 140px;
+  }
+  .message-sticker img {
+    max-width: 140px;
+    max-height: 140px;
   }
 }
 
@@ -253,7 +275,7 @@
   }
   
   @keyframes messageIn {
-    from { transform: translateY(8px) scale(0.98); opacity: 0; }
+    from { transform: translateY(4px) scale(0.99); opacity: 0; }
     to { transform: translateY(0) scale(1); opacity: 1; }
   }
   

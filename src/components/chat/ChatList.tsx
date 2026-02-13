@@ -76,7 +76,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     <div className="flex flex-col h-full bg-panel border-r border-panel-border">
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-3 pb-1 bg-panel shrink-0">
-        <h1 className="text-[34px] font-bold tracking-tight text-foreground">{sectionTitle}</h1>
+        <h1 className="text-[32px] sm:text-[28px] font-extrabold tracking-tight text-foreground ios-header">{sectionTitle}</h1>
         <div className="flex items-center gap-1">
           {viewMode === 'chats' && (
             <Button variant="ghost" size="icon" className="h-10 w-10 text-primary" onClick={onNewChat}>
