@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
+import { useBackButton } from '@/hooks/useBackButton';
 import { ChatList } from '@/components/chat/ChatList';
 import { ChatView } from '@/components/chat/ChatView';
 import { ContactPanel } from '@/components/contacts/ContactPanel';
@@ -23,6 +24,26 @@ export function MobileLayout() {
   const [showChatView, setShowChatView] = useState(false);
   const [showNewChatModal, setShowNewChatModal] = useState(false);
   const totalUnread = useAppStore.getState().totalUnread();
+
+  // Android/browser back button handler
+  const handleBack = useCallback(() => {
+    if (showContactPanel) {
+      setShowContactPanel(false);
+      return true;
+    }
+    if (showChatView) {
+      setShowChatView(false);
+      setActiveChat(null);
+      return true;
+    }
+    if (viewMode !== 'chats') {
+      setViewMode('chats');
+      return true;
+    }
+    return false; // let browser handle (exit)
+  }, [showContactPanel, showChatView, viewMode, setShowContactPanel, setActiveChat, setViewMode]);
+
+  useBackButton(handleBack);
 
   const handleOpenChat = (chat: any) => {
     setActiveChat(chat);

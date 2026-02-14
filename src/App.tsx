@@ -5,9 +5,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { useMessageNotifications } from '@/hooks/useMessageNotifications';
+import { lazy, Suspense } from "react";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+const AdminSettings = lazy(() => import("./pages/AdminSettings"));
 
 const queryClient = new QueryClient();
 
@@ -59,6 +61,7 @@ function AppRoutes() {
     <Routes>
       <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
       <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
+      <Route path="/app/settings" element={<Suspense fallback={<div className="flex min-h-screen items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}><AdminSettings /></Suspense>} />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );

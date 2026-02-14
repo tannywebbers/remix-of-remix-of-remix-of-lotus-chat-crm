@@ -10,7 +10,18 @@ interface PersistedUIState {
   drafts: Record<string, string>;
 }
 
+// Light data cache for instant load
+interface CachedData {
+  contacts: any[];
+  chats: any[];
+  messages: Record<string, any[]>;
+  unreadCounts: Record<string, number>;
+  ts: number;
+}
+
 const STORAGE_KEY = 'lotus-crm-ui';
+const CACHE_KEY = 'lotus-crm-cache';
+const CACHE_TTL = 5 * 60 * 1000; // 5 min
 
 function loadUIState(): Partial<PersistedUIState> {
   try {
@@ -23,6 +34,34 @@ function saveUIState(state: PersistedUIState) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch { /* quota exceeded — ignore */ }
+}
+
+function loadCachedData(): CachedData | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const data: CachedData = JSON.parse(raw);
+    if (Date.now() - data.ts > CACHE_TTL) {
+      localStorage.removeItem(CACHE_KEY);
+      return null;
+    }
+    return data;
+  } catch { return null; }
+}
+
+function saveCachedData(contacts: Contact[], chats: Chat[], messages: Record<string, Message[]>, unreadCounts: Record<string, number>) {
+  try {
+    const data: CachedData = {
+      contacts: contacts.slice(0, 100),
+      chats: chats.slice(0, 100),
+      messages: Object.fromEntries(
+        Object.entries(messages).map(([k, v]) => [k, v.slice(-50)])
+      ),
+      unreadCounts,
+      ts: Date.now(),
+    };
+    localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+  } catch { /* quota — ignore */ }
 }
 
 interface AppState {
@@ -190,7 +229,28 @@ export const useAppStore = create<AppState>()((set, get) => ({
   dataLoaded: false,
 
   loadData: async (userId: string) => {
-    set({ loading: true });
+    // Hydrate from light cache immediately for instant render
+    const cached = loadCachedData();
+    if (cached && cached.contacts.length > 0) {
+      const restoredContacts = cached.contacts.map((c: any) => ({
+        ...c,
+        createdAt: new Date(c.createdAt),
+        updatedAt: new Date(c.updatedAt),
+        lastSeen: c.lastSeen ? new Date(c.lastSeen) : undefined,
+      }));
+      const restoredChats = cached.chats.map((ch: any) => ({
+        ...ch,
+        contact: { ...ch.contact, createdAt: new Date(ch.contact.createdAt), updatedAt: new Date(ch.contact.updatedAt), lastSeen: ch.contact.lastSeen ? new Date(ch.contact.lastSeen) : undefined },
+        lastMessage: ch.lastMessage ? { ...ch.lastMessage, timestamp: new Date(ch.lastMessage.timestamp) } : undefined,
+      }));
+      const restoredMessages: Record<string, Message[]> = {};
+      for (const [cid, msgs] of Object.entries(cached.messages)) {
+        restoredMessages[cid] = (msgs as any[]).map(m => ({ ...m, timestamp: new Date(m.timestamp) }));
+      }
+      set({ contacts: restoredContacts, chats: restoredChats, messages: restoredMessages, unreadCounts: cached.unreadCounts, loading: false, dataLoaded: true });
+    } else {
+      set({ loading: true });
+    }
 
     try {
       const { data: contactsData, error: contactsError } = await supabase
@@ -264,6 +324,8 @@ export const useAppStore = create<AppState>()((set, get) => ({
       });
 
       set({ contacts, chats, messages: messagesMap, loading: false, dataLoaded: true, unreadCounts });
+      // Save light cache for next cold start
+      saveCachedData(contacts, chats, messagesMap, unreadCounts);
     } catch (error) {
       console.error('Error loading data:', error);
       set({ loading: false, dataLoaded: true });
