@@ -2,18 +2,26 @@ import { useEffect } from 'react';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppStore } from '@/store/appStore';
+import { useBackButton } from '@/hooks/useBackButton';
 import { DesktopLayout } from '@/components/layout/DesktopLayout';
 import { MobileLayout } from '@/components/layout/MobileLayout';
-import { usePresenceRefresh } from '@/hooks/usePresenceRefresh';
 import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const { loadData, loading, dataLoaded, addMessage, addContact, contacts } = useAppStore();
-
-  // Auto-refresh online status every 30s
-  usePresenceRefresh();
+  const { 
+    loadData, 
+    loading, 
+    dataLoaded, 
+    addMessage, 
+    activeChat, 
+    setActiveChat,
+    showContactPanel,
+    setShowContactPanel,
+    showAddContactModal,
+    setShowAddContactModal,
+  } = useAppStore();
 
   // Apply persisted theme on mount
   useEffect(() => {
@@ -63,6 +71,30 @@ const Index = () => {
 
     return () => { supabase.removeChannel(channel); };
   }, [user]);
+
+  // 🔙 NATIVE BACK BUTTON HANDLER (Android hardware back)
+  useBackButton(() => {
+    // Priority 1: Close modals first
+    if (showAddContactModal) {
+      setShowAddContactModal(false);
+      return true; // handled
+    }
+
+    // Priority 2: Close contact panel
+    if (showContactPanel) {
+      setShowContactPanel(false);
+      return true; // handled
+    }
+
+    // Priority 3: Exit chat and go to list
+    if (activeChat) {
+      setActiveChat(null);
+      return true; // handled
+    }
+
+    // Priority 4: At root - allow app exit
+    return false; // not handled - let browser/OS handle
+  });
 
   if (loading && !dataLoaded) {
     return (
