@@ -1,0 +1,158 @@
+import { useState, useEffect, useRef } from 'react';
+import { Mic, Square, Trash2, Send, Play, Pause } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { globalVoiceRecorder } from '@/lib/globalVoiceRecorder';
+import { useToast } from '@/hooks/use-toast';
+
+interface VoiceRecorderButtonProps {
+  onRecordingComplete: (blob: Blob) => void;
+  disabled?: boolean;
+}
+
+export function VoiceRecorderButton({ onRecordingComplete, disabled }: VoiceRecorderButtonProps) {
+  const { toast } = useToast();
+  const [controller, setController] = useState(globalVoiceRecorder.getState());
+  const [playing, setPlaying] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+
+  // Subscribe to global recorder state
+  useEffect(() => {
+    return globalVoiceRecorder.subscribe(setController);
+  }, []);
+
+  const handleStart = async () => {
+    const result = await globalVoiceRecorder.start();
+    if (!result.success) {
+      toast({ 
+        title: 'Recording failed', 
+        description: result.error, 
+        variant: 'destructive' 
+      });
+    }
+  };
+
+  const handleStop = () => {
+    globalVoiceRecorder.stop();
+  };
+
+  const handleCancel = () => {
+    globalVoiceRecorder.cancel();
+    setPlaying(false);
+  };
+
+  const handleSend = () => {
+    const blob = globalVoiceRecorder.getAudioBlob();
+    if (blob) {
+      onRecordingComplete(blob);
+      globalVoiceRecorder.reset();
+      setPlaying(false);
+    }
+  };
+
+  const togglePlayback = () => {
+    if (!audioRef.current || !controller.audioUrl) return;
+    
+    if (playing) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play();
+    }
+    setPlaying(!playing);
+  };
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, '0')}`;
+  };
+
+  // Preview mode (after recording stopped)
+  if (controller.state === 'stopped' && controller.audioUrl) {
+    return (
+      <div className="flex items-center gap-2 flex-1 bg-muted rounded-full px-3 py-2 animate-fade-in">
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="h-8 w-8 text-destructive hover:text-destructive/80" 
+          onClick={handleCancel}
+          disabled={disabled}
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+        
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="h-8 w-8" 
+          onClick={togglePlayback}
+          disabled={disabled}
+        >
+          {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+        </Button>
+        
+        <span className="text-sm flex-1 font-medium">{formatTime(controller.duration)}</span>
+        
+        <audio 
+          ref={audioRef} 
+          src={controller.audioUrl} 
+          onEnded={() => setPlaying(false)}
+          onPause={() => setPlaying(false)}
+          onPlay={() => setPlaying(true)}
+          className="hidden" 
+        />
+        
+        <Button 
+          size="icon" 
+          className="h-9 w-9 rounded-full bg-primary hover:bg-primary/90" 
+          onClick={handleSend}
+          disabled={disabled}
+        >
+          <Send className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+  }
+
+  // Recording mode - shows timer and pulsing indicator
+  if (controller.state === 'recording') {
+    return (
+      <div className="flex items-center gap-2 flex-1 bg-destructive/10 rounded-full px-4 py-2 animate-fade-in">
+        <Button 
+          variant="ghost" 
+          size="icon" 
+          className="h-8 w-8 text-destructive hover:text-destructive/80" 
+          onClick={handleCancel}
+        >
+          <Trash2 className="h-5 w-5" />
+        </Button>
+        
+        <div className="flex items-center gap-2 flex-1">
+          <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
+          <span className="text-sm font-medium text-destructive">{formatTime(controller.duration)}</span>
+        </div>
+        
+        <Button 
+          size="icon" 
+          className="h-10 w-10 rounded-full bg-foreground/10 hover:bg-foreground/20" 
+          onClick={handleStop}
+        >
+          <Square className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+  }
+
+  // Idle mode - just the mic button
+  return (
+    <Button 
+      variant="ghost" 
+      size="icon" 
+      className="h-10 w-10 shrink-0 hover:bg-accent" 
+      onClick={handleStart}
+      disabled={disabled || !globalVoiceRecorder.constructor.isSupported()}
+      title={!globalVoiceRecorder.constructor.isSupported() ? 'Voice recording not supported' : 'Record voice message'}
+    >
+      <Mic className="h-5 w-5 text-muted-foreground" />
+    </Button>
+  );
+}
