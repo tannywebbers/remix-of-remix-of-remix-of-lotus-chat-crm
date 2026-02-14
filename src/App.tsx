@@ -5,10 +5,13 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { useMessageNotifications } from '@/hooks/useMessageNotifications';
-import { lazy, Suspense } from "react";
+import { usePresenceRefresh } from '@/hooks/usePresenceRefresh';
+import { pushNotificationManager } from '@/lib/pushNotificationManager';
+import { lazy, Suspense, useEffect } from "react";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+
 const AdminSettings = lazy(() => import("./pages/AdminSettings"));
 
 const queryClient = new QueryClient();
@@ -52,16 +55,55 @@ function AuthRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// FIXED: Component that uses the notification hook - must be inside AuthProvider
+// UPDATED: AppRoutes with all hooks integrated
 function AppRoutes() {
-  // Call the notification hook here - inside the AuthProvider context
+  const { user } = useAuth();
+
+  // 🔔 Desktop/Local Notifications
   useMessageNotifications();
-  
+
+  // 🟢 Auto-refresh online status every 30s
+  usePresenceRefresh();
+
+  // 📲 Initialize Push Notifications (for mobile)
+  useEffect(() => {
+    if (user && pushNotificationManager.isSupported()) {
+      // Check if already subscribed
+      pushNotificationManager.isSubscribed().then(subscribed => {
+        if (!subscribed) {
+          // Initialize push in background
+          pushNotificationManager.initialize(user.id).then(result => {
+            if (result.success) {
+              console.log('✅ Push notifications initialized');
+            } else {
+              console.log('ℹ️ Push not available:', result.error);
+            }
+          });
+        } else {
+          console.log('✅ Already subscribed to push');
+        }
+      });
+    }
+  }, [user]);
+
   return (
     <Routes>
       <Route path="/auth" element={<AuthRoute><Auth /></AuthRoute>} />
       <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
-      <Route path="/app/settings" element={<Suspense fallback={<div className="flex min-h-screen items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" /></div>}><AdminSettings /></Suspense>} />
+      <Route 
+        path="/app/settings" 
+        element={
+          <Suspense fallback={
+            <div className="flex min-h-screen items-center justify-center">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+            </div>
+          }>
+            <ProtectedRoute>
+              <AdminSettings />
+            </ProtectedRoute>
+          </Suspense>
+        } 
+      />
       <Route path="*" element={<NotFound />} />
     </Routes>
   );
@@ -74,7 +116,6 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
-          {/* AppRoutes is now a component that can use hooks */}
           <AppRoutes />
         </BrowserRouter>
       </TooltipProvider>
