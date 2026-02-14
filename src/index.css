@@ -139,9 +139,8 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    /* UPDATED: San Francisco Pro with Roboto fallback + font-weight 350 */
     font-family: 'SF Pro Text', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI', Roboto, Arial, sans-serif;
-    font-weight: 350; /* Medium weight for entire app */
+    font-weight: 400; /* UPDATED: 400 for better readability (was 350) */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-tap-highlight-color: transparent;
@@ -149,24 +148,22 @@
     letter-spacing: -0.01em;
   }
 
-/* Same sender: 4px gap, different direction: 14px gap, group sep: 10px */
-.message-spacing-container > .flex + .flex {
-  margin-top: 4px;
-}
-.message-spacing-container > .flex.justify-end + .flex.justify-start,
-.message-spacing-container > .flex.justify-start + .flex.justify-end {
-  margin-top: 14px !important;
-}
+  /* Message spacing hierarchy - refined */
+  .message-spacing-container > .flex + .flex {
+    margin-top: 4px;
+  }
+  .message-spacing-container > .flex.justify-end + .flex.justify-start,
+  .message-spacing-container > .flex.justify-start + .flex.justify-end {
+    margin-top: 14px !important;
+  }
 
-/* Bubble corner geometry — WhatsApp iOS style */
-.message-bubble-outgoing {
-  border-radius: 8px 4px 8px 8px !important;
-}
-.message-bubble-incoming {
-  border-radius: 4px 8px 8px 8px !important;
-}
-
-
+  /* Bubble corner geometry — WhatsApp iOS style */
+  .message-bubble-outgoing {
+    border-radius: 8px 4px 8px 8px !important;
+  }
+  .message-bubble-incoming {
+    border-radius: 4px 8px 8px 8px !important;
+  }
   
   /* Safe area for mobile */
   .pb-safe {
@@ -179,7 +176,7 @@
 }
 
 @layer components {
-  /* UPDATED: Message Bubbles - iOS WhatsApp style with custom spacing */
+  /* Message Bubbles - iOS WhatsApp style */
   .message-bubble {
     @apply relative px-2 py-[5px] max-w-[65%] shadow-sm;
     border-radius: 8px;
@@ -187,18 +184,18 @@
     font-weight: 500; /* Medium-bold weight for chat messages */
   }
   
-  /* UPDATED: Outgoing messages (user sent) - 8px spacing */
+  /* Outgoing messages (user sent) - 8px spacing */
   .message-bubble-outgoing {
     @apply bg-[hsl(var(--bubble-outgoing))] text-[hsl(var(--bubble-text))];
     border-bottom-right-radius: 4px;
-    margin-left: 8px; /* 8px left spacing for user messages */
+    margin-left: 8px;
   }
   
-  /* UPDATED: Incoming messages (contact sent) - 14px spacing */
+  /* Incoming messages (contact sent) - 14px spacing */
   .message-bubble-incoming {
     @apply bg-[hsl(var(--bubble-incoming))] text-[hsl(var(--bubble-text))];
     border-bottom-left-radius: 4px;
-    margin-right: 14px; /* 14px right spacing for contact messages */
+    margin-right: 14px;
   }
   
   /* Chat Pattern Background */
@@ -315,5 +312,92 @@
   @keyframes typingBounce {
     0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
     40% { transform: scale(1); opacity: 1; }
+  }
+
+  /* ===== VOICE RECORDING ANIMATIONS ===== */
+  
+  /* Recording indicator pulse animation */
+  @keyframes recording-pulse {
+    0%, 100% { 
+      opacity: 1;
+      transform: scale(1);
+    }
+    50% { 
+      opacity: 0.5;
+      transform: scale(1.2);
+    }
+  }
+
+  .recording-indicator {
+    animation: recording-pulse 1s ease-in-out infinite;
+  }
+
+  /* ===== ENHANCED MESSAGE SPACING ===== */
+  
+  /* More breathing room between message content and timestamp */
+  .message-bubble > div:last-child {
+    margin-top: 8px;
+  }
+
+  /* ===== MEDIA MESSAGE ADJUSTMENTS ===== */
+  
+  /* Images, videos maintain bubble geometry */
+  .message-bubble img,
+  .message-bubble video {
+    border-radius: inherit;
+    max-width: 100%;
+  }
+
+  /* Audio player in bubble */
+  .message-bubble audio {
+    max-width: 100%;
+  }
+
+  /* ===== MOBILE OPTIMIZATIONS ===== */
+  
+  @media (max-width: 640px) {
+    .message-bubble {
+      max-width: 85%; /* Slightly wider on mobile */
+    }
+    
+    /* Ensure tap targets are big enough */
+    .message-bubble-incoming,
+    .message-bubble-outgoing {
+      min-height: 36px;
+      padding: 6px 10px;
+    }
+  }
+
+  /* ===== ACCESSIBILITY ===== */
+  
+  /* Focus indicators for keyboard navigation */
+  .message-bubble:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+
+  /* High contrast mode support */
+  @media (prefers-contrast: high) {
+    .message-bubble-outgoing {
+      border: 1px solid hsl(var(--border));
+    }
+    
+    .message-bubble-incoming {
+      border: 1px solid hsl(var(--border));
+    }
+  }
+
+  /* ===== REDUCE MOTION ===== */
+  
+  @media (prefers-reduced-motion: reduce) {
+    .message-bubble,
+    .recording-indicator,
+    .animate-message-in,
+    .animate-fade-in,
+    .animate-slide-in-right,
+    .animate-slide-in-left {
+      animation: none;
+      transition: none;
+    }
   }
 }
