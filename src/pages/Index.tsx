@@ -4,12 +4,16 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAppStore } from '@/store/appStore';
 import { DesktopLayout } from '@/components/layout/DesktopLayout';
 import { MobileLayout } from '@/components/layout/MobileLayout';
+import { usePresenceRefresh } from '@/hooks/usePresenceRefresh';
 import { supabase } from '@/integrations/supabase/client';
 
 const Index = () => {
   const isMobile = useIsMobile();
   const { user } = useAuth();
   const { loadData, loading, dataLoaded, addMessage, addContact, contacts } = useAppStore();
+
+  // Auto-refresh online status every 30s
+  usePresenceRefresh();
 
   // Apply persisted theme on mount
   useEffect(() => {
