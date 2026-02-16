@@ -1,8 +1,10 @@
-import { Key, Palette, User, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Key, Palette, User, ChevronRight, ArrowLeft, FileText } from 'lucide-react';
 import { useState } from 'react';
 import { WhatsAppApiSettings } from '@/components/settings/WhatsAppApiSettings';
 import { ThemeSettings } from '@/components/settings/ThemeSettings';
 import { AccountSettings } from '@/components/settings/AccountSettings';
+import { TemplateMappingSettings } from '@/components/settings/TemplateMappingSettings';
+import { AppTemplateSettings } from '@/components/settings/AppTemplateSettings';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { SettingsTab } from '@/types';
@@ -11,6 +13,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 
 const settingsTabs: { id: SettingsTab; label: string; icon: typeof Key; description: string }[] = [
   { id: 'api', label: 'WhatsApp API', icon: Key, description: 'Configure WhatsApp Cloud API' },
+  { id: 'templates', label: 'Templates', icon: FileText, description: 'App templates & mapping' },
   { id: 'theme', label: 'Appearance', icon: Palette, description: 'Theme and colors' },
   { id: 'account', label: 'Account', icon: User, description: 'Profile and security' },
 ];
@@ -65,6 +68,12 @@ export function SettingsView() {
         <ScrollArea className="flex-1">
           <div className="p-4">
             {activeTab === 'api' && <WhatsAppApiSettings />}
+            {activeTab === 'templates' && (
+              <div className="space-y-8">
+                <AppTemplateSettings />
+                <TemplateMappingSettings />
+              </div>
+            )}
             {activeTab === 'theme' && <ThemeSettings />}
             {activeTab === 'account' && <AccountSettings />}
           </div>
@@ -104,6 +113,12 @@ export function SettingsView() {
       <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
         <div className="max-w-2xl">
           {(!activeTab || activeTab === 'api') && <WhatsAppApiSettings />}
+          {activeTab === 'templates' && (
+            <div className="space-y-8">
+              <AppTemplateSettings />
+              <TemplateMappingSettings />
+            </div>
+          )}
           {activeTab === 'theme' && <ThemeSettings />}
           {activeTab === 'account' && <AccountSettings />}
         </div>

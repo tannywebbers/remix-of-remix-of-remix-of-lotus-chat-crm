@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { useMessageNotifications } from '@/hooks/useMessageNotifications';
 import { usePresenceRefresh } from '@/hooks/usePresenceRefresh';
 import { pushNotificationManager } from '@/lib/pushNotificationsManager-simple';
+import { initializePushNotifications, setupForegroundMessages } from '@/lib/firebase';
 import { lazy, Suspense, useEffect } from "react";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
@@ -65,25 +66,26 @@ function AppRoutes() {
   // 🟢 Auto-refresh online status every 30s
   usePresenceRefresh();
 
-  // 📲 Initialize Push Notifications (for mobile)
+  // 📲 Initialize Firebase Push Notifications
   useEffect(() => {
-    if (user && pushNotificationManager.isSupported()) {
-      // Check if already subscribed
-      pushNotificationManager.isSubscribed().then(subscribed => {
-        if (!subscribed) {
-          // Initialize push in background
-          pushNotificationManager.initialize(user.id).then(result => {
-            if (result.success) {
-              console.log('✅ Push notifications initialized');
-            } else {
-              console.log('ℹ️ Push not available:', result.error);
-            }
-          });
-        } else {
-          console.log('✅ Already subscribed to push');
-        }
-      });
-    }
+    if (!user) return;
+    
+    initializePushNotifications(user.id).then(result => {
+      if (result.success) {
+        console.log('✅ Firebase push initialized');
+      } else {
+        console.log('ℹ️ Firebase push not available:', result.error);
+      }
+    });
+
+    // Foreground message handler
+    setupForegroundMessages((payload) => {
+      const title = payload.notification?.title || 'New Message';
+      const body = payload.notification?.body || '';
+      if (Notification.permission === 'granted') {
+        new Notification(title, { body, icon: '/pwa-192x192.png' });
+      }
+    });
   }, [user]);
 
   return (

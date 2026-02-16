@@ -7,6 +7,8 @@ import { ContactAvatar } from '@/components/shared/ContactAvatar';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { FileUploadButton } from '@/components/chat/FileUploadButton';
 import { TemplateSelector } from '@/components/chat/TemplateSelector';
+import { AppTemplateSelector } from '@/components/chat/AppTemplateSelector';
+import { VoiceRecorderButton } from '@/components/chat/VoiceRecorderButton';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -388,8 +390,18 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         <div className="flex items-end gap-1.5 max-w-3xl mx-auto">
           <FileUploadButton onFileSelect={(file, type) => handleFileUpload(file, type)} uploading={uploading} />
           
-          {/* Template button — circular T icon */}
+          {/* Meta Template button */}
           <TemplateSelector contact={contact as any} onSelectTemplate={handleTemplateSelect} />
+
+          {/* App Template button — circular T icon */}
+          <AppTemplateSelector
+            contact={contact}
+            onInsertText={(text) => {
+              setInputValue(prev => prev + text);
+              if (activeChat) setDraft(activeChat.id, inputValue + text);
+              requestAnimationFrame(() => inputRef.current?.focus());
+            }}
+          />
 
           <div className="flex-1 flex items-end bg-background rounded-[20px] px-3 py-1 border border-input shadow-sm">
             <textarea
@@ -404,6 +416,15 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
               style={{ height: 'auto' }}
             />
           </div>
+
+          {/* Voice recorder next to send */}
+          <VoiceRecorderButton
+            onRecordingComplete={(blob) => {
+              const file = new File([blob], `voice-${Date.now()}.webm`, { type: blob.type || 'audio/webm' });
+              handleFileUpload(file, 'audio');
+            }}
+            disabled={sending || uploading}
+          />
 
           <Button 
             size="icon" 

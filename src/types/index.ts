@@ -57,4 +57,4 @@ export interface User {
 }
 
 export type ViewMode = 'chats' | 'contacts' | 'settings';
-export type SettingsTab = 'api' | 'theme' | 'account' | 'notifications' | 'business';
+export type SettingsTab = 'api' | 'theme' | 'account' | 'notifications' | 'business' | 'templates';
