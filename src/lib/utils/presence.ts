@@ -1,8 +1,8 @@
 // Compute real presence status from lastSeen timestamp
-const ONLINE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+// 70 seconds threshold as per WhatsApp standard
+const ONLINE_THRESHOLD_MS = 70 * 1000; // 70 seconds
 
 export function isContactOnline(lastSeen?: Date | string | null, storedOnline?: boolean): boolean {
-  // If webhook explicitly set online, check if it's recent
   if (lastSeen) {
     const lastSeenDate = typeof lastSeen === 'string' ? new Date(lastSeen) : lastSeen;
     return Date.now() - lastSeenDate.getTime() < ONLINE_THRESHOLD_MS;
