@@ -6,7 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { useMessageNotifications } from '@/hooks/useMessageNotifications';
 import { usePresenceRefresh } from '@/hooks/usePresenceRefresh';
-import { pushNotificationManager } from '@/lib/pushNotificationManager-simple';
+import { pushNotificationManager } from '@/lib/pushNotificationsManager-simple';
 import { lazy, Suspense, useEffect } from "react";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
