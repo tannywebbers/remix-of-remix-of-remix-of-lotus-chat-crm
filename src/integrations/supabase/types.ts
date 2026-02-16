@@ -49,6 +49,33 @@ export type Database = {
           },
         ]
       }
+      app_templates: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       contacts: {
         Row: {
           amount: number | null
@@ -184,6 +211,33 @@ export type Database = {
           email?: string | null
           id?: string
           name?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      push_tokens: {
+        Row: {
+          created_at: string
+          device_info: string | null
+          id: string
+          token: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          device_info?: string | null
+          id?: string
+          token: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          device_info?: string | null
+          id?: string
+          token?: string
           updated_at?: string
           user_id?: string
         }
