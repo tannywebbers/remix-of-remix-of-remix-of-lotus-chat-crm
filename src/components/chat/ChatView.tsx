@@ -1,15 +1,13 @@
-import { useState, useRef, useEffect } from 'react';
-import { Send, MoreVertical, Phone, Video, Info, ArrowLeft, Trash2, Pin, BellOff, Archive, X, MessageCircle, AlertTriangle, Star } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { Send, MoreVertical, Phone, Video, Info, ArrowLeft, Trash2, Pin, BellOff, Archive, X, MessageCircle, AlertTriangle, Star, FileText } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { ContactAvatar } from '@/components/shared/ContactAvatar';
 import { MessageBubble } from '@/components/chat/MessageBubble';
-import { VoiceRecorder } from '@/components/chat/VoiceRecorder';
 import { FileUploadButton } from '@/components/chat/FileUploadButton';
 import { TemplateSelector } from '@/components/chat/TemplateSelector';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -31,10 +29,10 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const draft = activeChat ? useAppStore.getState().drafts?.[activeChat.id] || '' : '';
   const [inputValue, setInputValue] = useState(draft);
   const [sending, setSending] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
   const [uploading, setUploading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const chatMessages = activeChat ? messages[activeChat.id] || [] : [];
   const hasCustomerReply = chatMessages.some(m => !m.isOutgoing);
@@ -42,32 +40,37 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const showBusinessNotice = hasAnyMessages && !hasCustomerReply;
   const isFav = activeChat ? useAppStore.getState().favorites[activeChat.id] : false;
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [chatMessages]);
+  // Scroll to bottom instantly when chat opens (no animation, no jump)
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'auto') => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
+    }
+  }, []);
 
-  // Sync draft when switching chats
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    scrollToBottom('auto');
+  }, [chatMessages.length]);
+
+  // Sync draft when switching chats + scroll to bottom instantly
   useEffect(() => {
     if (activeChat) {
       setInputValue(useAppStore.getState().drafts?.[activeChat.id] || '');
-      // FIXED: Mark messages as read when opening chat
       markMessagesAsRead();
+      // Use requestAnimationFrame for instant scroll after render
+      requestAnimationFrame(() => scrollToBottom('auto'));
     }
   }, [activeChat?.id]);
 
-  // FIXED: Mark incoming messages as read in database
   const markMessagesAsRead = async () => {
     if (!activeChat || !user) return;
-
     try {
-      const { error } = await supabase
+      await supabase
         .from('messages')
         .update({ status: 'read' })
         .eq('contact_id', activeChat.id)
         .eq('is_outgoing', false)
         .neq('status', 'read');
-
-      if (error) console.error('Error marking messages as read:', error);
     } catch (error) {
       console.error('Error marking messages as read:', error);
     }
@@ -76,7 +79,6 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   // Real-time listener for this chat's messages
   useEffect(() => {
     if (!activeChat || !user) return;
-
     const updateChannel = supabase
       .channel(`messages-update-${activeChat.id}`)
       .on('postgres_changes', {
@@ -87,10 +89,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         updateMessageStatus(activeChat.id, m.id, m.status);
       })
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(updateChannel);
-    };
+    return () => { supabase.removeChannel(updateChannel); };
   }, [activeChat?.id, user]);
 
   // Clipboard paste handler for images
@@ -103,9 +102,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         if (item.type.startsWith('image/')) {
           e.preventDefault();
           const file = item.getAsFile();
-          if (file) {
-            handleFileUpload(file, 'image');
-          }
+          if (file) handleFileUpload(file, 'image');
           break;
         }
       }
@@ -134,21 +131,13 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       if (!data?.success) {
         const errMsg = data?.error || 'Send failed';
         const explanation = getWhatsAppErrorExplanation(errMsg);
-        toast({
-          title: explanation.title,
-          description: `${explanation.description}\n\n💡 ${explanation.action}`,
-          variant: 'destructive',
-        });
+        toast({ title: explanation.title, description: `${explanation.description}\n\n💡 ${explanation.action}`, variant: 'destructive' });
         return null;
       }
       return data.messageId;
     } catch (err: any) {
       const explanation = getWhatsAppErrorExplanation(err.message);
-      toast({
-        title: explanation.title,
-        description: `${explanation.description}\n\n💡 ${explanation.action}`,
-        variant: 'destructive',
-      });
+      toast({ title: explanation.title, description: `${explanation.description}\n\n💡 ${explanation.action}`, variant: 'destructive' });
       return null;
     }
   };
@@ -173,7 +162,8 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         isOutgoing: true, timestamp: new Date(data.created_at),
         whatsappMessageId: whatsappMessageId || undefined,
       });
-      inputRef.current?.focus();
+      // Keep keyboard open and input focused after send
+      requestAnimationFrame(() => inputRef.current?.focus());
     } catch (error: any) {
       setInputValue(content);
       toast({ title: 'Failed to send message', description: error.message, variant: 'destructive' });
@@ -203,51 +193,12 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         status: whatsappMessageId ? 'sent' : 'failed', isOutgoing: true,
         timestamp: new Date(data.created_at), mediaUrl,
       });
-      toast({ title: `${type === 'image' ? 'Media' : type === 'document' ? 'Document' : 'Audio'} sent` });
+      toast({ title: `${type === 'image' ? 'Media' : 'Document'} sent` });
     } catch (err: any) {
       toast({ title: 'Failed to upload file', description: err.message, variant: 'destructive' });
     } finally { setUploading(false); }
   };
 
-  // FIXED: Voice recording handler
-  const handleVoiceRecording = async (blob: Blob) => {
-    if (!activeChat || !user) return;
-    setUploading(true);
-    try {
-      const filePath = `${user.id}/${activeChat.id}/${Date.now()}.webm`;
-      const { error: uploadError } = await supabase.storage.from('chat-media').upload(filePath, blob, { contentType: 'audio/webm' });
-      if (uploadError) throw uploadError;
-      
-      const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(filePath);
-      const mediaUrl = urlData.publicUrl;
-      
-      const whatsappMessageId = await sendMessageToWhatsApp('[Voice Message]', 'audio', mediaUrl);
-      
-      const { data, error } = await supabase.from('messages').insert({
-        user_id: user.id, contact_id: activeChat.id, content: '[Voice Message]', type: 'audio',
-        status: whatsappMessageId ? 'sent' : 'failed', is_outgoing: true,
-        media_url: mediaUrl, whatsapp_message_id: whatsappMessageId || null,
-      }).select().single();
-      
-      if (error) throw error;
-      
-      addMessage(activeChat.id, {
-        id: data.id, contactId: data.contact_id, content: '[Voice Message]', type: 'audio',
-        status: whatsappMessageId ? 'sent' : 'failed', isOutgoing: true,
-        timestamp: new Date(data.created_at), mediaUrl,
-      });
-      
-      toast({ title: 'Voice message sent' });
-    } catch (err: any) {
-      console.error('Voice recording error:', err);
-      toast({ title: 'Failed to send voice message', description: err.message, variant: 'destructive' });
-    } finally {
-      setUploading(false);
-      setIsRecording(false);
-    }
-  };
-
-  // FIXED: Template handler - send actual content, not template name
   const handleTemplateSelect = async (template: any, params: Record<string, string>) => {
     if (!activeChat || !user) return;
     setSending(true);
@@ -257,74 +208,39 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         toast({ title: 'WhatsApp not configured', variant: 'destructive' });
         return;
       }
-      
-      // Send via WhatsApp API
       const { data, error } = await supabase.functions.invoke('whatsapp-api', {
         body: {
-          action: 'send_message',
-          token: settings.api_token,
-          phoneNumberId: settings.phone_number_id,
-          to: activeChat.contact.phone,
-          type: 'template',
-          templateName: template.name,
-          templateParams: params,
+          action: 'send_message', token: settings.api_token,
+          phoneNumberId: settings.phone_number_id, to: activeChat.contact.phone,
+          type: 'template', templateName: template.name, templateParams: params,
         },
       });
-      
       if (error || !data?.success) {
         const errMsg = data?.error || error?.message || 'Failed to send template';
         const explanation = getWhatsAppErrorExplanation(errMsg);
-        toast({
-          title: explanation.title,
-          description: `${explanation.description}\n\n💡 ${explanation.action}`,
-          variant: 'destructive',
-        });
+        toast({ title: explanation.title, description: `${explanation.description}\n\n💡 ${explanation.action}`, variant: 'destructive' });
         return;
       }
-      
-      // FIXED: Build the actual template content by replacing placeholders
       const bodyComponent = template.components?.find((c: any) => c.type === 'BODY');
       let displayContent = bodyComponent?.text || template.name;
-      
-      // Replace {{1}}, {{2}}, etc. with actual values
-      Object.entries(params).forEach(([key, value]) => {
-        displayContent = displayContent.replace(key, value);
-      });
-      
-      // Save to database with actual content
+      Object.entries(params).forEach(([key, value]) => { displayContent = displayContent.replace(key, value); });
       const { data: messageData, error: msgError } = await supabase.from('messages').insert({
-        user_id: user.id,
-        contact_id: activeChat.id,
-        content: displayContent, // Save the filled template, not the template name
-        type: 'text',
-        status: 'sent',
-        is_outgoing: true,
+        user_id: user.id, contact_id: activeChat.id, content: displayContent,
+        type: 'text', status: 'sent', is_outgoing: true,
         whatsapp_message_id: data.messageId || null,
-        template_name: template.name, // Keep template name for reference
-        template_params: params,
+        template_name: template.name, template_params: params,
       }).select().single();
-      
       if (msgError) throw msgError;
-      
       addMessage(activeChat.id, {
-        id: messageData.id,
-        contactId: messageData.contact_id,
-        content: displayContent, // Show the filled content
-        type: 'text',
-        status: 'sent',
-        isOutgoing: true,
+        id: messageData.id, contactId: messageData.contact_id, content: displayContent,
+        type: 'text', status: 'sent', isOutgoing: true,
         timestamp: new Date(messageData.created_at),
-        templateName: template.name,
-        templateParams: params,
+        templateName: template.name, templateParams: params,
       });
-      
       toast({ title: 'Template message sent' });
     } catch (error: any) {
-      console.error('Template send error:', error);
       toast({ title: error.message || 'Failed to send template', variant: 'destructive' });
-    } finally {
-      setSending(false);
-    }
+    } finally { setSending(false); }
   };
 
   const handleChatAction = async (action: 'pin' | 'mute' | 'archive' | 'delete' | 'clear') => {
@@ -352,6 +268,15 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
+  // Auto-resize textarea
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputValue(e.target.value);
+    if (activeChat) setDraft(activeChat.id, e.target.value);
+    // Auto-resize
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+  };
+
   if (!activeChat) {
     return (
       <div className="flex-1 flex items-center justify-center chat-background">
@@ -367,6 +292,28 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   }
 
   const { contact } = activeChat;
+
+  // Build messages with spacing classes
+  const renderMessages = () => {
+    return chatMessages.map((message, i) => {
+      const prev = i > 0 ? chatMessages[i - 1] : null;
+      let spacingClass = '';
+      if (prev) {
+        if (prev.isOutgoing !== message.isOutgoing) {
+          spacingClass = 'mt-4'; // 16px direction change
+        } else {
+          // Same sender — check time gap
+          const timeDiff = message.timestamp.getTime() - prev.timestamp.getTime();
+          spacingClass = timeDiff > 60000 ? 'mt-3' : 'mt-[3px]'; // 12px group break, 3px same group
+        }
+      }
+      return (
+        <div key={message.id} className={spacingClass}>
+          <MessageBubble message={message} />
+        </div>
+      );
+    });
+  };
 
   return (
     <div className="flex flex-col h-full min-h-0">
@@ -416,8 +363,8 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto chat-background px-3 py-2 custom-scrollbar min-h-0">
-        <div className="max-w-[720px] mx-auto space-y-[2px]">
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto chat-background px-3 py-2 custom-scrollbar min-h-0">
+        <div className="max-w-[720px] mx-auto">
           {chatMessages.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               <p className="text-[14px]">No messages yet. Start the conversation!</p>
@@ -425,52 +372,47 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           )}
           {showBusinessNotice && (
             <div className="flex justify-center my-3">
-              <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-700 dark:text-amber-400 text-[13px]">
+              <div className="flex items-center gap-2 px-4 py-2 bg-amber-500/10 border border-amber-500/20 rounded-lg text-foreground/70 dark:text-foreground/60 text-[13px]">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
                 <span>Business-initiated conversation. Customer has not replied yet.</span>
               </div>
             </div>
           )}
-          {chatMessages.map((message) => (
-            <MessageBubble key={message.id} message={message} />
-          ))}
+          {renderMessages()}
           <div ref={messagesEndRef} />
         </div>
       </div>
 
-      {/* Input Bar */}
-      <div className="px-2 sm:px-3 py-2 bg-panel-header border-t border-panel-border shrink-0">
-        <div className="flex items-center gap-1 max-w-3xl mx-auto">
-          {!isRecording && (
-            <>
-              <FileUploadButton onFileSelect={(file, type) => handleFileUpload(file, type)} uploading={uploading} />
-              <TemplateSelector contact={contact as any} onSelectTemplate={handleTemplateSelect} />
-            </>
-          )}
+      {/* Input Bar — WhatsApp style */}
+      <div className="px-2 sm:px-3 py-1.5 bg-panel-header border-t border-panel-border shrink-0">
+        <div className="flex items-end gap-1.5 max-w-3xl mx-auto">
+          <FileUploadButton onFileSelect={(file, type) => handleFileUpload(file, type)} uploading={uploading} />
+          
+          {/* Template button — circular T icon */}
+          <TemplateSelector contact={contact as any} onSelectTemplate={handleTemplateSelect} />
 
-          {isRecording ? (
-            <VoiceRecorder isRecording={isRecording} setIsRecording={setIsRecording} onRecordingComplete={handleVoiceRecording} onCancel={() => setIsRecording(false)} />
-          ) : (
-            <>
-              <div className="flex-1 flex items-center bg-background rounded-full px-3 border border-input">
-                <Input
-                  ref={inputRef} value={inputValue}
-                  onChange={(e) => { setInputValue(e.target.value); if (activeChat) setDraft(activeChat.id, e.target.value); }}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Message"
-                  className="flex-1 border-0 focus-visible:ring-0 h-[38px] px-0 text-[16px] bg-transparent"
-                  disabled={sending || uploading}
-                />
-              </div>
-              {inputValue.trim() ? (
-                <Button size="icon" className="h-[38px] w-[38px] shrink-0 rounded-full bg-primary" onClick={handleSend} disabled={sending || uploading}>
-                  <Send className="h-[18px] w-[18px]" />
-                </Button>
-              ) : (
-                <VoiceRecorder isRecording={false} setIsRecording={setIsRecording} onRecordingComplete={handleVoiceRecording} onCancel={() => setIsRecording(false)} />
-              )}
-            </>
-          )}
+          <div className="flex-1 flex items-end bg-background rounded-[20px] px-3 py-1 border border-input shadow-sm">
+            <textarea
+              ref={inputRef}
+              value={inputValue}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              placeholder="Message"
+              rows={1}
+              className="flex-1 resize-none border-0 focus:outline-none min-h-[36px] max-h-[120px] py-[7px] text-[16px] bg-transparent leading-[1.3]"
+              disabled={sending || uploading}
+              style={{ height: 'auto' }}
+            />
+          </div>
+
+          <Button 
+            size="icon" 
+            className="h-[40px] w-[40px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-sm" 
+            onClick={handleSend} 
+            disabled={!inputValue.trim() || sending || uploading}
+          >
+            <Send className="h-[18px] w-[18px]" />
+          </Button>
         </div>
       </div>
     </div>

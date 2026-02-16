@@ -31,16 +31,35 @@ export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
   const [isLongPress, setIsLongPress] = useState(false);
   const isFav = favorites[chat.id];
 
-  const handleTouchStart = () => {
+  // Touch intent system — prevent accidental click during scroll
+  const touchStartY = useRef<number>(0);
+  const isScrolling = useRef<boolean>(false);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartY.current = e.touches[0].clientY;
+    isScrolling.current = false;
     longPressTimer.current = setTimeout(() => {
-      setIsLongPress(true);
-      setShowOptions(true);
+      if (!isScrolling.current) {
+        setIsLongPress(true);
+        setShowOptions(true);
+      }
     }, 500);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    const deltaY = Math.abs(e.touches[0].clientY - touchStartY.current);
+    if (deltaY > 8) {
+      isScrolling.current = true;
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current);
+        longPressTimer.current = null;
+      }
+    }
   };
 
   const handleTouchEnd = () => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
-    if (!isLongPress) onClick();
+    if (!isLongPress && !isScrolling.current) onClick();
     setIsLongPress(false);
   };
 
@@ -85,12 +104,15 @@ export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
     setShowOptions(false);
   };
   
+  const hasUnread = unreadCount > 0;
+
   return (
     <>
       <div className="relative">
         <button
           onClick={onClick}
           onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
           onContextMenu={handleContextMenu}
           className={cn(
@@ -104,13 +126,16 @@ export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
           <div className="flex-1 min-w-0 border-b border-panel-border pb-[10px]">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 min-w-0">
-                <span className="font-semibold text-[17px] truncate text-foreground">{contact.name}</span>
+                <span className={cn(
+                  'text-[17px] truncate text-foreground',
+                  hasUnread ? 'font-bold' : 'font-semibold'
+                )}>{contact.name}</span>
               </div>
               <div className="flex items-center gap-1 shrink-0 ml-2">
                 {lastMessage && (
                   <span className={cn(
                     'text-[13px]',
-                    unreadCount > 0 ? 'text-primary font-semibold' : 'text-muted-foreground'
+                    hasUnread ? 'text-primary font-semibold' : 'text-muted-foreground'
                   )}>
                     {formatChatTime(lastMessage.timestamp)}
                   </span>
@@ -123,7 +148,10 @@ export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
                 {lastMessage?.isOutgoing && (
                   <MessageStatus status={lastMessage.status} className="h-[16px] w-[16px]" />
                 )}
-                <span className="text-[15px] text-muted-foreground truncate leading-tight">
+                <span className={cn(
+                  'text-[15px] truncate leading-tight',
+                  hasUnread ? 'text-foreground font-semibold' : 'text-muted-foreground'
+                )}>
                   {lastMessage?.content || 'No messages yet'}
                 </span>
               </div>
@@ -132,7 +160,7 @@ export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
                 {isFav && <Star className="h-[14px] w-[14px] text-amber-500 fill-amber-500" />}
                 {isPinned && <Pin className="h-[14px] w-[14px] text-muted-foreground fill-muted-foreground" />}
                 {isMuted && <BellOff className="h-[14px] w-[14px] text-muted-foreground" />}
-                {unreadCount > 0 && (
+                {hasUnread && (
                   <span className="flex h-[22px] min-w-[22px] items-center justify-center rounded-full bg-primary px-1.5 text-[12px] font-bold text-primary-foreground">
                     {unreadCount}
                   </span>
