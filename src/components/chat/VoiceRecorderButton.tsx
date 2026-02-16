@@ -17,7 +17,8 @@ export function VoiceRecorderButton({ onRecordingComplete, disabled }: VoiceReco
 
   // Subscribe to global recorder state
   useEffect(() => {
-    return globalVoiceRecorder.subscribe(setController);
+    const unsub = globalVoiceRecorder.subscribe(setController);
+    return () => { unsub(); };
   }, []);
 
   const handleStart = async () => {
@@ -149,8 +150,8 @@ export function VoiceRecorderButton({ onRecordingComplete, disabled }: VoiceReco
       size="icon" 
       className="h-10 w-10 shrink-0 hover:bg-accent" 
       onClick={handleStart}
-      disabled={disabled || !globalVoiceRecorder.constructor.isSupported()}
-      title={!globalVoiceRecorder.constructor.isSupported() ? 'Voice recording not supported' : 'Record voice message'}
+      disabled={disabled || !(navigator.mediaDevices && window.MediaRecorder)}
+      title={!(navigator.mediaDevices && window.MediaRecorder) ? 'Voice recording not supported' : 'Record voice message'}
     >
       <Mic className="h-5 w-5 text-muted-foreground" />
     </Button>

@@ -47,7 +47,7 @@ class PushNotificationManager {
 
     try {
       const registration = await navigator.serviceWorker.ready;
-      const subscription = await registration.pushManager.getSubscription();
+      const subscription = await (registration as any).pushManager.getSubscription();
       return !!subscription;
     } catch (error) {
       console.error('Error checking subscription:', error);
@@ -113,14 +113,14 @@ class PushNotificationManager {
 
     try {
       // Check if already subscribed
-      let subscription = await this.swRegistration.pushManager.getSubscription();
+      let subscription = await (this.swRegistration as any).pushManager.getSubscription();
 
       if (!subscription) {
         // Convert VAPID key to Uint8Array
         const convertedVapidKey = this.urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
 
         // Create new subscription
-        subscription = await this.swRegistration.pushManager.subscribe({
+        subscription = await (this.swRegistration as any).pushManager.subscribe({
           userVisibleOnly: true,
           applicationServerKey: convertedVapidKey,
         });
@@ -155,7 +155,7 @@ class PushNotificationManager {
         auth: arrayBufferToBase64(this.pushSubscription.getKey('auth')),
       } : null;
 
-      await supabase.from('push_tokens').upsert({
+      await (supabase as any).from('push_tokens').upsert({
         user_id: userId,
         endpoint,
         keys,
@@ -178,7 +178,7 @@ class PushNotificationManager {
     }
 
     // Remove from database
-    await supabase.from('push_tokens').delete().eq('user_id', userId);
+    await (supabase as any).from('push_tokens').delete().eq('user_id', userId);
 
     console.log('✅ Unsubscribed from push notifications');
   }
@@ -214,8 +214,7 @@ class PushNotificationManager {
         body: 'Push notifications are working!',
         icon: '/pwa-192x192.png',
         badge: '/pwa-192x192.png',
-        vibrate: [200, 100, 200],
-      });
+      } as NotificationOptions);
     }
   }
 }
