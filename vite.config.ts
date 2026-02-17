@@ -14,8 +14,8 @@ export default defineConfig(({ mode }) => ({
     react(),
     mode === "development" && componentTagger(),
     VitePWA({
-      registerType: "autoUpdate",
-      includeAssets: ["favicon.ico", "apple-touch-icon.png", "masked-icon.svg"],
+      registerType: "prompt",
+      includeAssets: ["favicon.ico", "pwa-192x192.png", "pwa-512x512.png"],
       manifest: {
         name: "Lotus - WhatsApp CRM",
         short_name: "Lotus",
@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => ({
         theme_color: "#25D366",
         background_color: "#ffffff",
         display: "standalone",
-        orientation: "portrait",
+        orientation: "any",
         scope: "/",
         start_url: "/",
         icons: [
@@ -47,15 +47,18 @@ export default defineConfig(({ mode }) => ({
       },
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
+        cleanupOutdatedCaches: true,
+        skipWaiting: false,
+        clientsClaim: true,
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/fattyvnmuezlaumtxbva\.supabase\.co\/.*/i,
+            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
             handler: "NetworkFirst",
             options: {
               cacheName: "supabase-api-cache",
               expiration: {
                 maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24, // 24 hours
+                maxAgeSeconds: 60 * 60 * 24,
               },
               cacheableResponse: {
                 statuses: [0, 200],

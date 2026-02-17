@@ -114,7 +114,7 @@ export function VoiceRecorderButton({ onRecordingComplete, disabled }: VoiceReco
     );
   }
 
-  // Recording mode - shows timer and pulsing indicator
+  // Recording mode — replaces the text input area
   if (controller.state === 'recording') {
     return (
       <div className="flex items-center gap-2 flex-1 bg-destructive/10 rounded-full px-4 py-2 animate-fade-in">
@@ -130,11 +130,24 @@ export function VoiceRecorderButton({ onRecordingComplete, disabled }: VoiceReco
         <div className="flex items-center gap-2 flex-1">
           <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
           <span className="text-sm font-medium text-destructive">{formatTime(controller.duration)}</span>
+          {/* Simple waveform animation */}
+          <div className="flex items-center gap-[2px] flex-1">
+            {Array.from({ length: 20 }).map((_, i) => (
+              <div
+                key={i}
+                className="bg-destructive/60 rounded-full w-[3px]"
+                style={{
+                  height: `${8 + Math.sin((Date.now() / 200) + i) * 6}px`,
+                  animation: `pulse 0.8s ease-in-out ${i * 0.05}s infinite alternate`,
+                }}
+              />
+            ))}
+          </div>
         </div>
         
         <Button 
           size="icon" 
-          className="h-10 w-10 rounded-full bg-foreground/10 hover:bg-foreground/20" 
+          className="h-10 w-10 rounded-full bg-primary hover:bg-primary/90" 
           onClick={handleStop}
         >
           <Square className="h-4 w-4" />
@@ -143,17 +156,17 @@ export function VoiceRecorderButton({ onRecordingComplete, disabled }: VoiceReco
     );
   }
 
-  // Idle mode - just the mic button
+  // Idle mode - just the mic button (shown when no text input)
   return (
     <Button 
       variant="ghost" 
       size="icon" 
-      className="h-10 w-10 shrink-0 hover:bg-accent" 
+      className="h-[40px] w-[40px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-sm" 
       onClick={handleStart}
       disabled={disabled || !(navigator.mediaDevices && window.MediaRecorder)}
       title={!(navigator.mediaDevices && window.MediaRecorder) ? 'Voice recording not supported' : 'Record voice message'}
     >
-      <Mic className="h-5 w-5 text-muted-foreground" />
+      <Mic className="h-5 w-5 text-primary-foreground" />
     </Button>
   );
 }

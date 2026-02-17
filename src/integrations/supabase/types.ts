@@ -76,6 +76,45 @@ export type Database = {
         }
         Relationships: []
       }
+      chat_labels: {
+        Row: {
+          chat_id: string
+          created_at: string
+          id: string
+          label_id: string
+          user_id: string
+        }
+        Insert: {
+          chat_id: string
+          created_at?: string
+          id?: string
+          label_id: string
+          user_id: string
+        }
+        Update: {
+          chat_id?: string
+          created_at?: string
+          id?: string
+          label_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_labels_chat_id_fkey"
+            columns: ["chat_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_labels_label_id_fkey"
+            columns: ["label_id"]
+            isOneToOne: false
+            referencedRelation: "labels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           amount: number | null
@@ -129,6 +168,30 @@ export type Database = {
           name?: string
           phone?: string
           updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      labels: {
+        Row: {
+          color: string
+          created_at: string
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          id?: string
+          name?: string
           user_id?: string
         }
         Relationships: []

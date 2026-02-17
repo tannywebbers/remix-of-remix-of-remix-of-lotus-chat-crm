@@ -18,6 +18,8 @@ const settingsTabs: { id: SettingsTab; label: string; icon: typeof Key; descript
   { id: 'account', label: 'Account', icon: User, description: 'Profile and security' },
 ];
 
+// Note: AppTemplateSettings is imported and used in the templates tab
+
 export function SettingsView() {
   const [activeTab, setActiveTab] = useState<SettingsTab | null>(null);
   const isMobile = useIsMobile();
