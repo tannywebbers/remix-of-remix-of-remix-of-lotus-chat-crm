@@ -1,14 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, MoreVertical, Phone, Video, Info, ArrowLeft, Trash2, Pin, BellOff, Archive, X, MessageCircle, AlertTriangle, Star, FileText } from 'lucide-react';
+import { Send, MoreVertical, Info, ArrowLeft, Trash2, Pin, BellOff, Archive, X, MessageCircle, AlertTriangle, Star } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { ContactAvatar } from '@/components/shared/ContactAvatar';
 import { MessageBubble } from '@/components/chat/MessageBubble';
 import { FileUploadButton } from '@/components/chat/FileUploadButton';
-import { TemplateSelector } from '@/components/chat/TemplateSelector';
-import { AppTemplateSelector } from '@/components/chat/AppTemplateSelector';
+import { UnifiedTemplateSelector } from '@/components/chat/UnifiedTemplateSelector';
 import { VoiceRecorderButton } from '@/components/chat/VoiceRecorderButton';
+import { globalVoiceRecorder } from '@/lib/globalVoiceRecorder';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -32,6 +32,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const [inputValue, setInputValue] = useState(draft);
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [recorderState, setRecorderState] = useState(globalVoiceRecorder.getState());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -47,6 +48,12 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight;
     }
+  }, []);
+
+  // Subscribe to recorder state
+  useEffect(() => {
+    const unsub = globalVoiceRecorder.subscribe(setRecorderState);
+    return () => { unsub(); };
   }, []);
 
   // Scroll to bottom on new messages
@@ -341,8 +348,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           </button>
         </div>
         <div className="flex items-center shrink-0">
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-primary hidden sm:flex"><Video className="h-[22px] w-[22px]" /></Button>
-          <Button variant="ghost" size="icon" className="h-9 w-9 text-primary"><Phone className="h-[20px] w-[20px]" /></Button>
+          {/* Call buttons removed per requirement */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground"><MoreVertical className="h-5 w-5" /></Button>
@@ -388,52 +394,66 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       {/* Input Bar — WhatsApp style */}
       <div className="px-2 sm:px-3 py-1.5 bg-panel-header border-t border-panel-border shrink-0">
         <div className="flex items-end gap-1.5 max-w-3xl mx-auto">
-          <FileUploadButton onFileSelect={(file, type) => handleFileUpload(file, type)} uploading={uploading} />
-          
-          {/* Meta Template button */}
-          <TemplateSelector contact={contact as any} onSelectTemplate={handleTemplateSelect} />
+          {recorderState.state === 'idle' && (
+            <>
+              <FileUploadButton onFileSelect={(file, type) => handleFileUpload(file, type)} uploading={uploading} />
+              <UnifiedTemplateSelector
+                contact={contact}
+                onSelectMetaTemplate={handleTemplateSelect}
+                onInsertAppTemplate={(text) => {
+                  setInputValue(prev => prev + text);
+                  if (activeChat) setDraft(activeChat.id, inputValue + text);
+                  requestAnimationFrame(() => inputRef.current?.focus());
+                }}
+              />
+            </>
+          )}
 
-          {/* App Template button — circular T icon */}
-          <AppTemplateSelector
-            contact={contact}
-            onInsertText={(text) => {
-              setInputValue(prev => prev + text);
-              if (activeChat) setDraft(activeChat.id, inputValue + text);
-              requestAnimationFrame(() => inputRef.current?.focus());
-            }}
-          />
-
-          <div className="flex-1 flex items-end bg-background rounded-[20px] px-3 py-1 border border-input shadow-sm">
-            <textarea
-              ref={inputRef}
-              value={inputValue}
-              onChange={handleInputChange}
-              onKeyDown={handleKeyDown}
-              placeholder="Message"
-              rows={1}
-              className="flex-1 resize-none border-0 focus:outline-none min-h-[36px] max-h-[120px] py-[7px] text-[16px] bg-transparent leading-[1.3]"
+          {recorderState.state !== 'idle' ? (
+            /* Recording or preview replaces textarea */
+            <VoiceRecorderButton
+              onRecordingComplete={(blob) => {
+                const file = new File([blob], `voice-${Date.now()}.webm`, { type: blob.type || 'audio/webm' });
+                handleFileUpload(file, 'audio');
+              }}
               disabled={sending || uploading}
-              style={{ height: 'auto' }}
             />
-          </div>
+          ) : (
+            <>
+              <div className="flex-1 flex items-end bg-background rounded-[20px] px-3 py-1 border border-input shadow-sm">
+                <textarea
+                  ref={inputRef}
+                  value={inputValue}
+                  onChange={handleInputChange}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Message"
+                  rows={1}
+                  className="flex-1 resize-none border-0 focus:outline-none min-h-[36px] max-h-[120px] py-[7px] text-[16px] bg-transparent leading-[1.3]"
+                  disabled={sending || uploading}
+                  style={{ height: 'auto' }}
+                />
+              </div>
 
-          {/* Voice recorder next to send */}
-          <VoiceRecorderButton
-            onRecordingComplete={(blob) => {
-              const file = new File([blob], `voice-${Date.now()}.webm`, { type: blob.type || 'audio/webm' });
-              handleFileUpload(file, 'audio');
-            }}
-            disabled={sending || uploading}
-          />
-
-          <Button 
-            size="icon" 
-            className="h-[40px] w-[40px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-sm" 
-            onClick={handleSend} 
-            disabled={!inputValue.trim() || sending || uploading}
-          >
-            <Send className="h-[18px] w-[18px]" />
-          </Button>
+              {inputValue.trim() ? (
+                <Button 
+                  size="icon" 
+                  className="h-[40px] w-[40px] shrink-0 rounded-full bg-primary hover:bg-primary/90 shadow-sm" 
+                  onClick={handleSend} 
+                  disabled={sending || uploading}
+                >
+                  <Send className="h-[18px] w-[18px]" />
+                </Button>
+              ) : (
+                <VoiceRecorderButton
+                  onRecordingComplete={(blob) => {
+                    const file = new File([blob], `voice-${Date.now()}.webm`, { type: blob.type || 'audio/webm' });
+                    handleFileUpload(file, 'audio');
+                  }}
+                  disabled={sending || uploading}
+                />
+              )}
+            </>
+          )}
         </div>
       </div>
     </div>

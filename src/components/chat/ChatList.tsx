@@ -1,13 +1,26 @@
-import { useState } from 'react';
-import { MessageCircle, Users, Plus, SquarePen, Archive, Star } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { MessageCircle, Users, Plus, SquarePen, Archive, Star, Tag, SortAsc, SortDesc } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { ChatListItem } from '@/components/chat/ChatListItem';
 import { ContactListItem } from '@/components/contacts/ContactListItem';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 
 type ChatFilter = 'all' | 'unread' | 'favorites' | 'archived';
+type SortBy = 'recent' | 'name' | 'amount';
+type SortDir = 'asc' | 'desc';
+
+interface Label {
+  id: string;
+  name: string;
+  color: string;
+}
 
 interface ChatListProps {
   onChatSelect?: (chat: any) => void;
@@ -15,6 +28,7 @@ interface ChatListProps {
 }
 
 export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
+  const { user } = useAuth();
   const { 
     viewMode, 
     setViewMode, 
@@ -29,6 +43,27 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   } = useAppStore();
 
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
+  const [sortBy, setSortBy] = useState<SortBy>('recent');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const [labels, setLabels] = useState<Label[]>([]);
+  const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
+  const [chatLabelMap, setChatLabelMap] = useState<Record<string, string[]>>({});
+
+  // Fetch labels
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('labels' as any).select('*').eq('user_id', user.id).then(({ data }) => {
+      setLabels((data as any[]) || []);
+    });
+    supabase.from('chat_labels' as any).select('*').eq('user_id', user.id).then(({ data }) => {
+      const map: Record<string, string[]> = {};
+      ((data as any[]) || []).forEach((cl: any) => {
+        if (!map[cl.chat_id]) map[cl.chat_id] = [];
+        map[cl.chat_id].push(cl.label_id);
+      });
+      setChatLabelMap(map);
+    });
+  }, [user]);
 
   const archivedChats = chats.filter(c => c.isArchived || c.contact.isArchived);
   const archivedCount = archivedChats.length;
@@ -40,10 +75,16 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       if (!matchesSearch) return false;
       
       if (chatFilter === 'archived') return chat.isArchived || chat.contact.isArchived;
-      // Non-archived filters exclude archived chats
       if (chat.isArchived || chat.contact.isArchived) return false;
       if (chatFilter === 'unread') return chat.unreadCount > 0;
       if (chatFilter === 'favorites') return favorites[chat.id];
+
+      // Label filter
+      if (selectedLabelId) {
+        const chatLabels = chatLabelMap[chat.id] || [];
+        if (!chatLabels.includes(selectedLabelId)) return false;
+      }
+
       return true;
     })
     .sort((a, b) => {
@@ -54,9 +95,18 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       }
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
-      const aTime = a.lastMessage?.timestamp.getTime() || 0;
-      const bTime = b.lastMessage?.timestamp.getTime() || 0;
-      return bTime - aTime;
+
+      let cmp = 0;
+      if (sortBy === 'name') {
+        cmp = a.contact.name.localeCompare(b.contact.name);
+      } else if (sortBy === 'amount') {
+        cmp = (a.contact.amount || 0) - (b.contact.amount || 0);
+      } else {
+        const aTime = a.lastMessage?.timestamp.getTime() || a.contact.createdAt.getTime();
+        const bTime = b.lastMessage?.timestamp.getTime() || b.contact.createdAt.getTime();
+        cmp = bTime - aTime; // newest first by default
+      }
+      return sortDir === 'asc' ? cmp : (sortBy === 'recent' ? cmp : -cmp);
     });
 
   const filteredContacts = contacts.filter(contact =>
@@ -100,25 +150,63 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         />
       </div>
 
-      {/* Chat Filter Tabs */}
+      {/* Chat Filter Tabs + Sort */}
       {viewMode === 'chats' && (
-        <div className="flex px-4 py-1.5 gap-2 shrink-0 overflow-x-auto">
-          {(['all', 'unread', 'favorites', 'archived'] as ChatFilter[]).map((filter) => (
-            <button
-              key={filter}
-              onClick={() => setChatFilter(filter)}
-              className={cn(
-                'px-3 py-[6px] text-[13px] font-semibold rounded-full transition-all whitespace-nowrap flex items-center gap-1',
-                chatFilter === filter
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground'
-              )}
-            >
-              {filter === 'favorites' && <Star className="h-3 w-3" />}
-              {filter === 'archived' && <Archive className="h-3 w-3" />}
-              {filter === 'all' ? 'All' : filter === 'unread' ? 'Unread' : filter === 'favorites' ? 'Favorites' : `Archived${archivedCount > 0 ? ` (${archivedCount})` : ''}`}
-            </button>
-          ))}
+        <div className="px-4 py-1.5 shrink-0 space-y-1.5">
+          <div className="flex gap-2 overflow-x-auto">
+            {(['all', 'unread', 'favorites', 'archived'] as ChatFilter[]).map((filter) => (
+              <button
+                key={filter}
+                onClick={() => { setChatFilter(filter); setSelectedLabelId(null); }}
+                className={cn(
+                  'px-3 py-[6px] text-[13px] font-semibold rounded-full transition-all whitespace-nowrap flex items-center gap-1',
+                  chatFilter === filter && !selectedLabelId
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground'
+                )}
+              >
+                {filter === 'favorites' && <Star className="h-3 w-3" />}
+                {filter === 'archived' && <Archive className="h-3 w-3" />}
+                {filter === 'all' ? 'All' : filter === 'unread' ? 'Unread' : filter === 'favorites' ? 'Favorites' : `Archived${archivedCount > 0 ? ` (${archivedCount})` : ''}`}
+              </button>
+            ))}
+
+            {/* Label filters */}
+            {labels.map(label => (
+              <button
+                key={label.id}
+                onClick={() => { setSelectedLabelId(selectedLabelId === label.id ? null : label.id); setChatFilter('all'); }}
+                className={cn(
+                  'px-3 py-[6px] text-[13px] font-semibold rounded-full transition-all whitespace-nowrap flex items-center gap-1',
+                  selectedLabelId === label.id
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground'
+                )}
+              >
+                <Tag className="h-3 w-3" />
+                {label.name}
+              </button>
+            ))}
+
+            {/* Sort dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="px-3 py-[6px] text-[13px] font-semibold rounded-full bg-muted text-muted-foreground flex items-center gap-1 whitespace-nowrap">
+                  {sortDir === 'asc' ? <SortAsc className="h-3 w-3" /> : <SortDesc className="h-3 w-3" />}
+                  Sort
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => setSortBy('recent')} className={sortBy === 'recent' ? 'font-bold' : ''}>Recent</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSortBy('name')} className={sortBy === 'name' ? 'font-bold' : ''}>Name</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSortBy('amount')} className={sortBy === 'amount' ? 'font-bold' : ''}>Amount</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setSortDir(sortDir === 'asc' ? 'desc' : 'asc')}>
+                  {sortDir === 'asc' ? 'Descending' : 'Ascending'}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       )}
 
