@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ChevronRight, ArrowLeft, BarChart3, FileText } from 'lucide-react';
+import { ChevronRight, ArrowLeft, BarChart3, FileText, LayoutTemplate } from 'lucide-react';
 import { WhatsAppApiSettings } from '@/components/settings/WhatsAppApiSettings';
 import { ThemeSettings } from '@/components/settings/ThemeSettings';
 import { AccountSettings } from '@/components/settings/AccountSettings';
@@ -7,12 +7,13 @@ import { NotificationSettings } from '@/components/settings/NotificationSettings
 import { WhatsAppBusinessProfile } from '@/components/settings/WhatsAppBusinessProfile';
 import { ApiStatsPage } from '@/components/settings/ApiStatsPage';
 import { TemplateMappingSettings } from '@/components/settings/TemplateMappingSettings';
+import { AppTemplateSettings } from '@/components/settings/AppTemplateSettings';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 
-type SettingsTab = 'api' | 'theme' | 'account' | 'notifications' | 'business' | 'stats' | 'template-mapping';
+type SettingsTab = 'api' | 'theme' | 'account' | 'notifications' | 'business' | 'stats' | 'template-mapping' | 'app-templates';
 
 interface SettingsItem {
   id: SettingsTab;
@@ -24,13 +25,14 @@ interface SettingsItem {
 }
 
 const settingsTabs: SettingsItem[] = [
-  { id: 'business', label: 'Business Profile', description: 'WhatsApp Business info', iconSrc: '/icons/business-profile.png', iconBg: 'bg-[hsl(168,100%,18%)]' },
-  { id: 'api', label: 'WhatsApp API', description: 'Configure Cloud API', iconSrc: '/icons/webhook.png', iconBg: 'bg-[hsl(145,63%,49%)]', showBadge: true },
-  { id: 'stats', label: 'API Stats', description: 'Message analytics & usage', iconBg: 'bg-[hsl(199,89%,48%)]' },
-  { id: 'template-mapping', label: 'Template Mapping', description: 'Map template variables to data', iconBg: 'bg-[hsl(32,95%,52%)]' },
-  { id: 'notifications', label: 'Notifications', description: 'Message alerts and sounds', iconBg: 'bg-[hsl(0,84%,60%)]' },
-  { id: 'theme', label: 'Appearance', description: 'Theme and colors', iconSrc: '/icons/appearance.png', iconBg: 'bg-[hsl(262,83%,58%)]' },
-  { id: 'account', label: 'Account', description: 'Profile and security', iconBg: 'bg-[hsl(199,89%,48%)]' },
+  { id: 'business',         label: 'Business Profile',   description: 'WhatsApp Business info',            iconSrc: '/icons/business-profile.png', iconBg: 'bg-[hsl(168,100%,18%)]' },
+  { id: 'api',              label: 'WhatsApp API',        description: 'Configure Cloud API',               iconSrc: '/icons/webhook.png',           iconBg: 'bg-[hsl(145,63%,49%)]', showBadge: true },
+  { id: 'stats',            label: 'API Stats',           description: 'Message analytics & usage',         iconBg: 'bg-[hsl(199,89%,48%)]' },
+  { id: 'template-mapping', label: 'Template Mapping',    description: 'Map template variables to data',    iconBg: 'bg-[hsl(32,95%,52%)]' },
+  { id: 'app-templates',    label: 'App Templates',       description: 'Create & manage message templates',  iconBg: 'bg-[hsl(262,83%,58%)]' },
+  { id: 'notifications',    label: 'Notifications',       description: 'Message alerts and sounds',         iconBg: 'bg-[hsl(0,84%,60%)]' },
+  { id: 'theme',            label: 'Appearance',          description: 'Theme and colors',                  iconSrc: '/icons/appearance.png', iconBg: 'bg-[hsl(262,83%,58%)]' },
+  { id: 'account',          label: 'Account',             description: 'Profile and security',              iconBg: 'bg-[hsl(199,89%,48%)]' },
 ];
 
 export function SettingsPage() {
@@ -66,13 +68,14 @@ export function SettingsPage() {
         </div>
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           <div className="p-4">
-            {activeTab === 'business' && <WhatsAppBusinessProfile />}
-            {activeTab === 'api' && <WhatsAppApiSettings onConnectionChange={setIsConnected} />}
-            {activeTab === 'stats' && <ApiStatsPage />}
+            {activeTab === 'business'         && <WhatsAppBusinessProfile />}
+            {activeTab === 'api'              && <WhatsAppApiSettings onConnectionChange={setIsConnected} />}
+            {activeTab === 'stats'            && <ApiStatsPage />}
             {activeTab === 'template-mapping' && <TemplateMappingSettings />}
-            {activeTab === 'notifications' && <NotificationSettings />}
-            {activeTab === 'theme' && <ThemeSettings />}
-            {activeTab === 'account' && <AccountSettings />}
+            {activeTab === 'app-templates'    && <AppTemplateSettings />}
+            {activeTab === 'notifications'    && <NotificationSettings />}
+            {activeTab === 'theme'            && <ThemeSettings />}
+            {activeTab === 'account'          && <AccountSettings />}
           </div>
         </div>
       </div>
@@ -100,10 +103,18 @@ export function SettingsPage() {
                   <BarChart3 className="h-[18px] w-[18px] text-white" />
                 ) : id === 'template-mapping' ? (
                   <FileText className="h-[18px] w-[18px] text-white" />
+                ) : id === 'app-templates' ? (
+                  <LayoutTemplate className="h-[18px] w-[18px] text-white" />
                 ) : id === 'notifications' ? (
-                  <svg className="h-[18px] w-[18px] text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                  <svg className="h-[18px] w-[18px] text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                  </svg>
                 ) : id === 'account' ? (
-                  <svg className="h-[18px] w-[18px] text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  <svg className="h-[18px] w-[18px] text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
                 ) : null}
               </div>
               <div className={cn(
@@ -113,7 +124,7 @@ export function SettingsPage() {
                 <div className="flex items-center gap-2">
                   <p className="text-[17px] font-medium">{label}</p>
                   {showBadge && (
-                    <Badge 
+                    <Badge
                       variant={isConnected ? 'default' : 'secondary'}
                       className="text-[10px] px-1.5 py-0 h-[18px]"
                     >
