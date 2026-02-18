@@ -179,6 +179,7 @@
   /* Message Bubbles - WhatsApp style with tails */
   .message-bubble {
     @apply relative px-3 py-[7px] max-w-[85%] sm:max-w-[78%] lg:max-w-[58%] xl:max-w-[52%] shadow-sm;
+    @apply relative px-3 py-[7px] max-w-[82%] sm:max-w-[74%] lg:max-w-[65%] shadow-sm;
     border-radius: 7px;
     line-height: 1.32;
   }

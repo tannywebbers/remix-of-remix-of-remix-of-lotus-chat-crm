@@ -487,6 +487,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                 const mimeType = blob.type || 'audio/ogg;codecs=opus';
                 const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mpeg') ? 'mp3' : mimeType.includes('mp4') ? 'm4a' : mimeType.includes('amr') ? 'amr' : mimeType.includes('webm') ? 'webm' : 'ogg';
                 const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mimeType });
+                const file = new File([blob], `voice-${Date.now()}.ogg`, { type: blob.type || 'audio/ogg;codecs=opus' });
                 handleFileUpload(file, 'audio');
               }}
               disabled={sending || uploading}
@@ -522,6 +523,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                     const mimeType = blob.type || 'audio/ogg;codecs=opus';
                 const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mpeg') ? 'mp3' : mimeType.includes('mp4') ? 'm4a' : mimeType.includes('amr') ? 'amr' : mimeType.includes('webm') ? 'webm' : 'ogg';
                 const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mimeType });
+                    const file = new File([blob], `voice-${Date.now()}.ogg`, { type: blob.type || 'audio/ogg;codecs=opus' });
                     handleFileUpload(file, 'audio');
                   }}
                   disabled={sending || uploading}

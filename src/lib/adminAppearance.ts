@@ -58,6 +58,11 @@ export function applyAdminAppearance() {
   root.dataset.appName = settings.appName;
 
   root.style.setProperty('--admin-font-family', "'SF Pro Text', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI', sans-serif");
+  if (settings.fontFamily === 'inter') {
+    root.style.setProperty('--admin-font-family', "Inter, 'SF Pro Text', -apple-system, sans-serif");
+  } else {
+    root.style.setProperty('--admin-font-family', "'SF Pro Text', 'SF Pro Display', -apple-system, sans-serif");
+  }
 
   root.classList.toggle('dark', settings.darkMode);
   window.dispatchEvent(new CustomEvent(ADMIN_APPEARANCE_EVENT, { detail: settings }));

@@ -108,6 +108,7 @@ export default function AdminSettings() {
               <Label>Font family</Label>
               <select value={fontFamily} onChange={e => { setFontFamily(e.target.value); applyLive({ fontFamily: e.target.value }); }} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
                 <option value="sf-pro">San Francisco (SF Pro)</option>
+                <option value="inter">Inter</option>
               </select>
             </div>
           </CardContent>

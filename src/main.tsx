@@ -23,6 +23,20 @@ if ('serviceWorker' in navigator) {
         waiting.postMessage({ type: 'SKIP_WAITING' });
       };
 
+
+      const promptKey = `lotus_sw_prompted_${SW_VERSION}`;
+
+      const maybePromptUpdate = () => {
+        const waiting = registration.waiting;
+        if (!waiting || localStorage.getItem(promptKey) === '1') return;
+
+        const confirmed = window.confirm('New version available. Update now?');
+        if (confirmed) {
+          waiting.postMessage({ type: 'SKIP_WAITING' });
+          localStorage.setItem(promptKey, '1');
+        }
+      };
+
       registration.addEventListener('updatefound', () => {
         const installing = registration.installing;
         if (!installing) return;
@@ -34,6 +48,12 @@ if ('serviceWorker' in navigator) {
       });
 
       if (registration.waiting) applyWaitingUpdate();
+            maybePromptUpdate();
+          }
+        });
+      });
+
+      if (registration.waiting) maybePromptUpdate();
 
       setInterval(() => {
         registration.update();
@@ -43,6 +63,7 @@ if ('serviceWorker' in navigator) {
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;
         refreshing = true;
+        localStorage.removeItem(promptKey);
         window.location.reload();
       });
 
