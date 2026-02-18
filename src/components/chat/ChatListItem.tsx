@@ -172,15 +172,14 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [] }: ChatL
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className={cn(
-                  'text-[17px] truncate text-foreground',
-                  hasUnread ? 'font-bold' : 'font-semibold'
+                  'text-[17px] truncate text-foreground font-normal'
                 )}>{contact.name}</span>
               </div>
               <div className="flex items-center gap-1 shrink-0 ml-2">
                 {lastMessage && (
                   <span className={cn(
                     'text-[13px]',
-                    hasUnread ? 'text-primary font-semibold' : 'text-muted-foreground'
+                    hasUnread ? 'text-primary font-normal' : 'text-muted-foreground'
                   )}>
                     {formatChatTime(lastMessage.timestamp)}
                   </span>
@@ -194,8 +193,8 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [] }: ChatL
                   <MessageStatus status={lastMessage.status} className="h-[16px] w-[16px]" />
                 )}
                 <span className={cn(
-                  'text-[15px] truncate leading-tight',
-                  hasUnread ? 'text-foreground font-semibold' : 'text-muted-foreground'
+                  'text-[15px] truncate leading-tight font-normal',
+                  hasUnread ? 'text-foreground' : 'text-muted-foreground'
                 )}>
                   {lastMessage?.content || 'No messages yet'}
                 </span>

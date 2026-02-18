@@ -17,6 +17,13 @@ if ('serviceWorker' in navigator) {
       const registration = await navigator.serviceWorker.register('/sw.js');
       console.log('✅ Service Worker registered:', registration.scope);
 
+      const applyWaitingUpdate = () => {
+        const waiting = registration.waiting;
+        if (!waiting) return;
+        waiting.postMessage({ type: 'SKIP_WAITING' });
+      };
+
+
       const promptKey = `lotus_sw_prompted_${SW_VERSION}`;
 
       const maybePromptUpdate = () => {
@@ -35,6 +42,12 @@ if ('serviceWorker' in navigator) {
         if (!installing) return;
         installing.addEventListener('statechange', () => {
           if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+            applyWaitingUpdate();
+          }
+        });
+      });
+
+      if (registration.waiting) applyWaitingUpdate();
             maybePromptUpdate();
           }
         });
