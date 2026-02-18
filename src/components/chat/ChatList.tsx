@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { MessageCircle, Users, Plus, SquarePen, Archive, Star, Tag, SortAsc, SortDesc, Settings2 } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { MessageCircle, Users, Plus, SquarePen, Archive, Tag, SortAsc, SortDesc, Settings2 } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { ChatListItem } from '@/components/chat/ChatListItem';
@@ -13,7 +13,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 
-type ChatFilter = 'all' | 'unread' | 'favorites' | 'archived';
+type ChatFilter = 'all' | 'unread' | 'archived';
 type SortBy = 'recent' | 'name' | 'amount';
 type SortDir = 'asc' | 'desc';
 
@@ -50,7 +50,18 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
   const [chatLabelMap, setChatLabelMap] = useState<Record<string, string[]>>({});
   const [showLabelManager, setShowLabelManager] = useState(false);
+  const listContainerRef = useRef<HTMLDivElement | null>(null);
 
+  const restoreListScroll = useCallback(() => {
+    const key = viewMode === 'contacts' ? 'lotus_contacts_scroll' : 'lotus_chats_scroll';
+    const saved = Number(sessionStorage.getItem(key) || '0');
+    if (listContainerRef.current) listContainerRef.current.scrollTop = saved;
+  }, [viewMode]);
+
+  const persistListScroll = useCallback(() => {
+    const key = viewMode === 'contacts' ? 'lotus_contacts_scroll' : 'lotus_chats_scroll';
+    if (listContainerRef.current) sessionStorage.setItem(key, String(listContainerRef.current.scrollTop));
+  }, [viewMode]);
 
   // Fetch labels
   const fetchLabels = async () => {
@@ -72,6 +83,25 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
     if (user) fetchLabels();
   }, [user]);
 
+  useEffect(() => {
+    const el = listContainerRef.current;
+    if (!el) return;
+    restoreListScroll();
+    const onScroll = () => persistListScroll();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [viewMode, restoreListScroll, persistListScroll]);
+
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`labels-sync-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'labels', filter: `user_id=eq.${user.id}` }, fetchLabels)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_labels', filter: `user_id=eq.${user.id}` }, fetchLabels)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
   const archivedChats = chats.filter(c => c.isArchived || c.contact.isArchived);
   const archivedCount = archivedChats.length;
 
@@ -84,7 +114,6 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       if (chatFilter === 'archived') return chat.isArchived || chat.contact.isArchived;
       if (chat.isArchived || chat.contact.isArchived) return false;
       if (chatFilter === 'unread') return chat.unreadCount > 0;
-      if (chatFilter === 'favorites') return favorites[chat.id];
 
       // Label filter
       if (selectedLabelId) {
@@ -166,7 +195,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       {viewMode === 'chats' && (
         <div className="px-4 py-1.5 shrink-0 space-y-1.5">
           <div className="flex gap-2 overflow-x-auto">
-            {(['all', 'unread', 'favorites', 'archived'] as ChatFilter[]).map((filter) => (
+            {(['all', 'unread', 'archived'] as ChatFilter[]).map((filter) => (
               <button
                 key={filter}
                 onClick={() => { setChatFilter(filter); setSelectedLabelId(null); }}
@@ -177,9 +206,8 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                     : 'bg-muted text-muted-foreground'
                 )}
               >
-                {filter === 'favorites' && <Star className="h-3 w-3" />}
                 {filter === 'archived' && <Archive className="h-3 w-3" />}
-                {filter === 'all' ? 'All' : filter === 'unread' ? 'Unread' : filter === 'favorites' ? 'Favorites' : `Archived${archivedCount > 0 ? ` (${archivedCount})` : ''}`}
+                {filter === 'all' ? 'All' : filter === 'unread' ? 'Unread' : `Archived${archivedCount > 0 ? ` (${archivedCount})` : ''}`}
               </button>
             ))}
 
@@ -195,7 +223,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                     : 'bg-muted text-muted-foreground'
                 )}
               >
-                <Tag className="h-3 w-3" />
+                <Tag className="h-3 w-3" style={{ color: label.color }} />
                 {label.name}
               </button>
             ))}
@@ -223,17 +251,14 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       )}
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar">
+      <div ref={listContainerRef} className="flex-1 overflow-y-auto custom-scrollbar">
         {viewMode === 'chats' && (
           <>
             {filteredChats.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4">
                 <MessageCircle className="h-14 w-14 mb-3 opacity-40" />
                 <p className="text-[15px] font-medium">
-                  {chatFilter === 'unread' ? 'No unread messages' 
-                    : chatFilter === 'favorites' ? 'No favorite chats'
-                    : chatFilter === 'archived' ? 'No archived chats'
-                    : 'No chats yet'}
+                  {chatFilter === 'unread' ? 'No unread messages' : chatFilter === 'archived' ? 'No archived chats' : 'No chats yet'}
                 </p>
                 {chatFilter === 'all' && <p className="text-[13px] mt-1">Add contacts to start chatting</p>}
               </div>
@@ -273,10 +298,14 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 <p className="text-[15px]">No contacts found</p>
               </div>
             ) : (
-              filteredContacts.map(contact => (
-                <ContactListItem
+              filteredContacts.map(contact => {
+                const contactLabelIds = chatLabelMap[contact.id] || [];
+                const resolvedContactLabels = labels.filter(l => contactLabelIds.includes(l.id));
+                return (
+                  <ContactListItem
                   key={contact.id}
                   contact={contact}
+                  labels={resolvedContactLabels}
                   onClick={() => {
                     const chat = chats.find(c => c.contact.id === contact.id);
                     if (chat) {
@@ -284,8 +313,9 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                       setViewMode('chats');
                     }
                   }}
-                />
-              ))
+                  />
+                );
+              })
             )}
           </>
         )}

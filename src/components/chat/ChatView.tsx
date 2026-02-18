@@ -298,7 +298,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           <div className="w-56 h-56 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
             <MessageCircle className="w-24 h-24 text-primary/60" />
           </div>
-          <h2 className="text-[22px] font-light text-foreground/70 mb-2">waba</h2>
+          <h2 className="text-[22px] font-light text-foreground/70 mb-2">{localStorage.getItem('admin_app_name') || 'waba'}</h2>
           <p className="text-muted-foreground text-[15px] max-w-sm mx-auto">Select a chat to start messaging</p>
         </div>
       </div>
@@ -445,7 +445,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
             /* Recording or preview replaces textarea */
             <VoiceRecorderButton
               onRecordingComplete={(blob) => {
-                const file = new File([blob], `voice-${Date.now()}.webm`, { type: blob.type || 'audio/webm' });
+                const file = new File([blob], `voice-${Date.now()}.ogg`, { type: blob.type || 'audio/ogg;codecs=opus' });
                 handleFileUpload(file, 'audio');
               }}
               disabled={sending || uploading}
@@ -478,7 +478,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
               ) : (
                 <VoiceRecorderButton
                   onRecordingComplete={(blob) => {
-                    const file = new File([blob], `voice-${Date.now()}.webm`, { type: blob.type || 'audio/webm' });
+                    const file = new File([blob], `voice-${Date.now()}.ogg`, { type: blob.type || 'audio/ogg;codecs=opus' });
                     handleFileUpload(file, 'audio');
                   }}
                   disabled={sending || uploading}
