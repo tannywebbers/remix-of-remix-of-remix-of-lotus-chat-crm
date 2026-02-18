@@ -125,7 +125,12 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     return () => document.removeEventListener('paste', handlePaste);
   }, [activeChat?.id, user]);
 
-  const sendMessageToWhatsApp = async (content: string, type: 'text' | 'image' | 'document' | 'audio' = 'text', mediaUrl?: string) => {
+  const sendMessageToWhatsApp = async (
+    content: string,
+    type: 'text' | 'image' | 'document' | 'audio' = 'text',
+    mediaUrl?: string,
+    mediaMeta?: { fileName?: string; mimeType?: string }
+  ) => {
     if (!activeChat || !user) return null;
     try {
       const { data: settings } = await supabase
@@ -138,7 +143,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         body: {
           action: 'send_message', token: settings.api_token,
           phoneNumberId: settings.phone_number_id, to: activeChat.contact.phone,
-          type, content: mediaUrl || content,
+          type, content: mediaUrl || content, mediaFileName: mediaMeta?.fileName, mediaMimeType: mediaMeta?.mimeType,
         },
       });
       if (error) throw new Error(error.message);
@@ -184,18 +189,52 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     } finally { setSending(false); }
   };
 
+
+  const getExtensionFromMime = (mimeType: string) => {
+    if (mimeType.includes('ogg')) return 'ogg';
+    if (mimeType.includes('mpeg')) return 'mp3';
+    if (mimeType.includes('mp4')) return 'm4a';
+    if (mimeType.includes('wav')) return 'wav';
+    if (mimeType.includes('webm')) return 'webm';
+    return 'bin';
+  };
+
+  const getAudioDeliveryType = (mimeType: string): 'audio' | 'document' => {
+    const normalized = mimeType.toLowerCase();
+    // WhatsApp Cloud API accepts OGG(OPUS), MP3, AAC(M4A), AMR for audio messages.
+    if (normalized.includes('ogg') || normalized.includes('mpeg') || normalized.includes('mp4') || normalized.includes('amr')) {
+      return 'audio';
+    }
+    // Unsupported audio mime (e.g. webm) fallback to document to ensure delivery.
+    return 'document';
+  };
+
   const handleFileUpload = async (file: File, type: 'image' | 'document' | 'audio') => {
     if (!activeChat || !user) return;
     setUploading(true);
     try {
-      const fileExt = file.name.split('.').pop();
+      const mimeType = file.type || 'application/octet-stream';
+      const extFromMime = getExtensionFromMime(mimeType);
+      const fileExt = (file.name.split('.').pop() || extFromMime).toLowerCase();
       const filePath = `${user.id}/${activeChat.id}/${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage.from('chat-media').upload(filePath, file);
+      const { error: uploadError } = await supabase.storage.from('chat-media').upload(filePath, file, {
+        contentType: mimeType,
+        upsert: false,
+      });
       if (uploadError) throw uploadError;
       const { data: urlData } = supabase.storage.from('chat-media').getPublicUrl(filePath);
       const mediaUrl = urlData.publicUrl;
-      const msgType = type === 'audio' ? 'audio' : type;
-      const whatsappMessageId = await sendMessageToWhatsApp(file.name, msgType as any, mediaUrl);
+
+      const msgType = type === 'audio' ? getAudioDeliveryType(mimeType) : type;
+      const whatsappMessageId = await sendMessageToWhatsApp(file.name, msgType as any, mediaUrl, {
+        fileName: file.name,
+        mimeType,
+      });
+
+      if (type === 'audio' && msgType === 'document') {
+        toast({ title: 'Voice sent as file', description: 'This browser produced an unsupported WhatsApp audio codec, so it was delivered as a document.' });
+      }
+
       const { data, error } = await supabase.from('messages').insert({
         user_id: user.id, contact_id: activeChat.id, content: file.name, type: msgType,
         status: whatsappMessageId ? 'sent' : 'failed', is_outgoing: true,
@@ -298,7 +337,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           <div className="w-56 h-56 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
             <MessageCircle className="w-24 h-24 text-primary/60" />
           </div>
-          <h2 className="text-[22px] font-light text-foreground/70 mb-2">waba</h2>
+          <h2 className="text-[22px] font-light text-foreground/70 mb-2">{localStorage.getItem('admin_app_name') || 'waba'}</h2>
           <p className="text-muted-foreground text-[15px] max-w-sm mx-auto">Select a chat to start messaging</p>
         </div>
       </div>
@@ -330,7 +369,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   };
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0 font-medium">
       {/* Header */}
       <div className="flex items-center justify-between px-1 sm:px-3 py-[6px] bg-panel-header border-b border-panel-border shrink-0">
         <div className="flex items-center gap-1 min-w-0">
@@ -377,7 +416,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
       {/* Messages */}
       <div ref={messagesContainerRef} className="flex-1 overflow-y-auto chat-background px-3 py-2 custom-scrollbar min-h-0">
-        <div className="max-w-[720px] mx-auto">
+        <div className="w-full max-w-none mx-auto">
           {chatMessages.length === 0 && (
             <div className="text-center py-8 text-muted-foreground">
               <p className="text-[14px]">No messages yet. Start the conversation!</p>
@@ -445,7 +484,9 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
             /* Recording or preview replaces textarea */
             <VoiceRecorderButton
               onRecordingComplete={(blob) => {
-                const file = new File([blob], `voice-${Date.now()}.webm`, { type: blob.type || 'audio/webm' });
+                const mimeType = blob.type || 'audio/ogg;codecs=opus';
+                const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mpeg') ? 'mp3' : mimeType.includes('mp4') ? 'm4a' : mimeType.includes('amr') ? 'amr' : mimeType.includes('webm') ? 'webm' : 'ogg';
+                const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mimeType });
                 handleFileUpload(file, 'audio');
               }}
               disabled={sending || uploading}
@@ -478,7 +519,9 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
               ) : (
                 <VoiceRecorderButton
                   onRecordingComplete={(blob) => {
-                    const file = new File([blob], `voice-${Date.now()}.webm`, { type: blob.type || 'audio/webm' });
+                    const mimeType = blob.type || 'audio/ogg;codecs=opus';
+                const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mpeg') ? 'mp3' : mimeType.includes('mp4') ? 'm4a' : mimeType.includes('amr') ? 'amr' : mimeType.includes('webm') ? 'webm' : 'ogg';
+                const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mimeType });
                     handleFileUpload(file, 'audio');
                   }}
                   disabled={sending || uploading}

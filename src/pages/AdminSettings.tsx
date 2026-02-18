@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { Lock, Palette, Type, Bell, Image } from 'lucide-react';
+import { Lock, Palette, Type, Bell, Moon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
+import { readAdminAppearance, saveAndApplyAdminAppearance } from '@/lib/adminAppearance';
 
 const ADMIN_PASSWORD = 'lotus_admin_2026';
 
@@ -13,9 +15,25 @@ export default function AdminSettings() {
   const [password, setPassword] = useState('');
   const { toast } = useToast();
 
-  const [appName, setAppName] = useState(() => localStorage.getItem('admin_app_name') || 'waba');
-  const [primaryColor, setPrimaryColor] = useState(() => localStorage.getItem('admin_primary_color') || '#25D366');
-  const [notificationSound, setNotificationSound] = useState(() => localStorage.getItem('admin_notification_sound') || 'default');
+  const initial = readAdminAppearance();
+  const [appName, setAppName] = useState(initial.appName);
+  const [primaryColor, setPrimaryColor] = useState(initial.primaryColor);
+  const [notificationSound, setNotificationSound] = useState(initial.notificationSound);
+  const [fontFamily, setFontFamily] = useState(initial.fontFamily);
+  const [darkMode, setDarkMode] = useState(initial.darkMode);
+  const [brandingLogo, setBrandingLogo] = useState(initial.brandingLogo);
+
+  const applyLive = (next: Partial<ReturnType<typeof readAdminAppearance>>) => {
+    saveAndApplyAdminAppearance({
+      appName,
+      primaryColor,
+      notificationSound,
+      fontFamily,
+      darkMode,
+      brandingLogo,
+      ...next,
+    });
+  };
 
   if (!authenticated) {
     return (
@@ -35,13 +53,7 @@ export default function AdminSettings() {
                 toast({ title: 'Access denied', description: 'Incorrect password', variant: 'destructive' });
               }
             }} className="space-y-4">
-              <Input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                autoFocus
-              />
+              <Input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)} autoFocus />
               <Button type="submit" className="w-full">Unlock</Button>
             </form>
           </CardContent>
@@ -51,10 +63,8 @@ export default function AdminSettings() {
   }
 
   const handleSave = () => {
-    localStorage.setItem('admin_app_name', appName);
-    localStorage.setItem('admin_primary_color', primaryColor);
-    localStorage.setItem('admin_notification_sound', notificationSound);
-    toast({ title: 'Settings saved', description: 'Changes applied. Reload to see full effect.' });
+    applyLive({});
+    toast({ title: 'Settings saved', description: 'Changes applied instantly.' });
   };
 
   return (
@@ -69,7 +79,11 @@ export default function AdminSettings() {
           <CardContent className="space-y-4">
             <div>
               <Label>App Name</Label>
-              <Input value={appName} onChange={e => setAppName(e.target.value)} />
+              <Input value={appName} onChange={e => { setAppName(e.target.value); applyLive({ appName: e.target.value }); }} />
+            </div>
+            <div>
+              <Label>Branding logo URL</Label>
+              <Input value={brandingLogo} onChange={e => { setBrandingLogo(e.target.value); applyLive({ brandingLogo: e.target.value }); }} placeholder="https://..." />
             </div>
           </CardContent>
         </Card>
@@ -82,9 +96,19 @@ export default function AdminSettings() {
             <div>
               <Label>Primary Color</Label>
               <div className="flex items-center gap-3">
-                <input type="color" value={primaryColor} onChange={e => setPrimaryColor(e.target.value)} className="h-10 w-14 rounded cursor-pointer" />
-                <Input value={primaryColor} onChange={e => setPrimaryColor(e.target.value)} className="w-32" />
+                <input type="color" value={primaryColor} onChange={e => { setPrimaryColor(e.target.value); applyLive({ primaryColor: e.target.value }); }} className="h-10 w-14 rounded cursor-pointer" />
+                <Input value={primaryColor} onChange={e => { setPrimaryColor(e.target.value); applyLive({ primaryColor: e.target.value }); }} className="w-32" />
               </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <Label className="flex items-center gap-2"><Moon className="h-4 w-4" /> Dark mode</Label>
+              <Switch checked={darkMode} onCheckedChange={(value) => { setDarkMode(value); applyLive({ darkMode: value }); }} />
+            </div>
+            <div>
+              <Label>Font family</Label>
+              <select value={fontFamily} onChange={e => { setFontFamily(e.target.value); applyLive({ fontFamily: e.target.value }); }} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <option value="sf-pro">San Francisco (SF Pro)</option>
+              </select>
             </div>
           </CardContent>
         </Card>
@@ -96,11 +120,7 @@ export default function AdminSettings() {
           <CardContent className="space-y-4">
             <div>
               <Label>Sound</Label>
-              <select 
-                value={notificationSound} 
-                onChange={e => setNotificationSound(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
+              <select value={notificationSound} onChange={e => { setNotificationSound(e.target.value); applyLive({ notificationSound: e.target.value }); }} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
                 <option value="default">Default beep</option>
                 <option value="iphone">iPhone SMS tone</option>
                 <option value="whatsapp">WhatsApp tone</option>

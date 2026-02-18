@@ -50,6 +50,11 @@ export function AppTemplateSettings() {
     if (user) fetchTemplates();
   }, [user]);
 
+  const ensureTemplateTableReady = async () => {
+    // Schema cache can lag after migrations in hosted environments.
+    await supabase.from('app_templates' as any).select('id').limit(1);
+  };
+
   const fetchTemplates = async () => {
     if (!user) return;
     setLoading(true);
@@ -58,7 +63,16 @@ export function AppTemplateSettings() {
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
-    if (!error) setTemplates((data as any[]) || []);
+
+    if (error) {
+      const msg = String(error.message || '');
+      if (msg.toLowerCase().includes('schema cache') || msg.toLowerCase().includes('could not find the table')) {
+        toast({ title: 'Template table not ready', description: 'Schema cache is refreshing. Please retry in a moment.', variant: 'destructive' });
+      }
+    } else {
+      setTemplates((data as any[]) || []);
+    }
+
     setLoading(false);
   };
 
@@ -71,8 +85,14 @@ export function AppTemplateSettings() {
       toast({ title: 'Name and body are required', variant: 'destructive' });
       return;
     }
+    if (name.trim().length < 2 || body.trim().length < 3) {
+      toast({ title: 'Template is too short', description: 'Provide a longer name and body.', variant: 'destructive' });
+      return;
+    }
+
     setSaving(true);
     try {
+      await ensureTemplateTableReady();
       if (editing) {
         const { error } = await supabase
           .from('app_templates' as any)
