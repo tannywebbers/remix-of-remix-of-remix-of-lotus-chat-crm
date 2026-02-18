@@ -8,6 +8,7 @@ import { MessageBubble } from '@/components/chat/MessageBubble';
 import { FileUploadButton } from '@/components/chat/FileUploadButton';
 import { UnifiedTemplateSelector } from '@/components/chat/UnifiedTemplateSelector';
 import { VoiceRecorderButton } from '@/components/chat/VoiceRecorderButton';
+import { ImagePastePreview } from '@/components/chat/ImagePastePreview';
 import { globalVoiceRecorder } from '@/lib/globalVoiceRecorder';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,6 +34,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [recorderState, setRecorderState] = useState(globalVoiceRecorder.getState());
+  const [pastedImageFile, setPastedImageFile] = useState<File | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -101,7 +103,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     return () => { supabase.removeChannel(updateChannel); };
   }, [activeChat?.id, user]);
 
-  // Clipboard paste handler for images
+  // Clipboard paste handler for images — show preview before send
   useEffect(() => {
     const handlePaste = async (e: ClipboardEvent) => {
       if (!activeChat || !user) return;
@@ -111,7 +113,10 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         if (item.type.startsWith('image/')) {
           e.preventDefault();
           const file = item.getAsFile();
-          if (file) handleFileUpload(file, 'image');
+          if (file) {
+            // Show preview modal instead of auto-sending
+            setPastedImageFile(file);
+          }
           break;
         }
       }
@@ -293,7 +298,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           <div className="w-56 h-56 mx-auto mb-6 rounded-full bg-primary/10 flex items-center justify-center">
             <MessageCircle className="w-24 h-24 text-primary/60" />
           </div>
-          <h2 className="text-[22px] font-light text-foreground/70 mb-2">Lotus CRM</h2>
+          <h2 className="text-[22px] font-light text-foreground/70 mb-2">waba</h2>
           <p className="text-muted-foreground text-[15px] max-w-sm mx-auto">Select a chat to start messaging</p>
         </div>
       </div>
@@ -390,6 +395,33 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           <div ref={messagesEndRef} />
         </div>
       </div>
+
+      {/* Image Paste Preview Modal */}
+      <ImagePastePreview
+        file={pastedImageFile}
+        onConfirm={async (file, caption) => {
+          setPastedImageFile(null);
+          await handleFileUpload(file, 'image');
+          // If caption provided, send as text after
+          if (caption.trim()) {
+            const content = caption.trim();
+            const whatsappMessageId = await sendMessageToWhatsApp(content);
+            const { data, error } = await supabase.from('messages').insert({
+              user_id: user!.id, contact_id: activeChat!.id, content, type: 'text',
+              status: whatsappMessageId ? 'sent' : 'failed', is_outgoing: true,
+              whatsapp_message_id: whatsappMessageId || null,
+            }).select().single();
+            if (!error && data) {
+              addMessage(activeChat!.id, {
+                id: data.id, contactId: data.contact_id, content, type: 'text',
+                status: whatsappMessageId ? 'sent' : 'failed', isOutgoing: true,
+                timestamp: new Date(data.created_at),
+              });
+            }
+          }
+        }}
+        onCancel={() => setPastedImageFile(null)}
+      />
 
       {/* Input Bar — WhatsApp style */}
       <div className="px-2 sm:px-3 py-1.5 bg-panel-header border-t border-panel-border shrink-0">

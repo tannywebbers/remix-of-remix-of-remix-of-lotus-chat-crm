@@ -13,7 +13,7 @@ export default function AdminSettings() {
   const [password, setPassword] = useState('');
   const { toast } = useToast();
 
-  const [appName, setAppName] = useState(() => localStorage.getItem('admin_app_name') || 'Lotus CRM');
+  const [appName, setAppName] = useState(() => localStorage.getItem('admin_app_name') || 'waba');
   const [primaryColor, setPrimaryColor] = useState(() => localStorage.getItem('admin_primary_color') || '#25D366');
   const [notificationSound, setNotificationSound] = useState(() => localStorage.getItem('admin_notification_sound') || 'default');
 

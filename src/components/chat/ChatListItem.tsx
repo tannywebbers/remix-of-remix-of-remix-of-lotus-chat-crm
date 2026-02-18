@@ -15,13 +15,20 @@ import { useAppStore } from '@/store/appStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
+interface Label {
+  id: string;
+  name: string;
+  color: string;
+}
+
 interface ChatListItemProps {
   chat: Chat;
   isActive: boolean;
   onClick: () => void;
+  chatLabels?: Label[];
 }
 
-export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
+export function ChatListItem({ chat, isActive, onClick, chatLabels = [] }: ChatListItemProps) {
   const { contact, lastMessage, unreadCount, isPinned, isMuted, isArchived } = chat;
   const { updateContact, setMessages, chats, setChats, favorites, toggleFavorite } = useAppStore();
   const { toast } = useToast();
@@ -157,6 +164,16 @@ export function ChatListItem({ chat, isActive, onClick }: ChatListItemProps) {
               </div>
               
               <div className="flex items-center gap-1 shrink-0 ml-2">
+                {/* Label badges */}
+                {chatLabels.slice(0, 2).map(label => (
+                  <span
+                    key={label.id}
+                    className="px-1.5 py-0.5 rounded-full text-white text-[10px] font-semibold leading-tight"
+                    style={{ backgroundColor: label.color }}
+                  >
+                    {label.name}
+                  </span>
+                ))}
                 {isFav && <Star className="h-[14px] w-[14px] text-amber-500 fill-amber-500" />}
                 {isPinned && <Pin className="h-[14px] w-[14px] text-muted-foreground fill-muted-foreground" />}
                 {isMuted && <BellOff className="h-[14px] w-[14px] text-muted-foreground" />}
