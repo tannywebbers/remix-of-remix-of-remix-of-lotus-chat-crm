@@ -85,7 +85,7 @@ export function NotificationSettings() {
         
         // Show test notification
         try {
-          new Notification('Lotus CRM', {
+          new Notification('waba', {
             body: 'Notifications are now enabled!',
             icon: '/pwa-192x192.png',
           });

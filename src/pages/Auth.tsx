@@ -102,7 +102,7 @@ const Auth = () => {
     } else {
       toast({ 
         title: 'Account Created!', 
-        description: 'Welcome to Lotus CRM.' 
+        description: 'Welcome to waba.' 
       });
       navigate('/');
     }

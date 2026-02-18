@@ -151,7 +151,8 @@ serve(async (req) => {
     }
   } catch (error) {
     console.error('WhatsApp API error:', error);
-    return new Response(JSON.stringify({ error: error.message }),
+    const errMsg = error instanceof Error ? error.message : String(error);
+    return new Response(JSON.stringify({ error: errMsg }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });

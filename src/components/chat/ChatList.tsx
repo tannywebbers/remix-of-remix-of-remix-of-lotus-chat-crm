@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { MessageCircle, Users, Plus, SquarePen, Archive, Star, Tag, SortAsc, SortDesc } from 'lucide-react';
+import { MessageCircle, Users, Plus, SquarePen, Archive, Star, Tag, SortAsc, SortDesc, Settings2 } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { ChatListItem } from '@/components/chat/ChatListItem';
 import { ContactListItem } from '@/components/contacts/ContactListItem';
+import { LabelManagerPanel } from '@/components/chat/LabelManagerPanel';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
@@ -48,21 +49,27 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const [labels, setLabels] = useState<Label[]>([]);
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
   const [chatLabelMap, setChatLabelMap] = useState<Record<string, string[]>>({});
+  const [showLabelManager, setShowLabelManager] = useState(false);
+
 
   // Fetch labels
-  useEffect(() => {
+  const fetchLabels = async () => {
     if (!user) return;
-    supabase.from('labels' as any).select('*').eq('user_id', user.id).then(({ data }) => {
-      setLabels((data as any[]) || []);
+    const [labelsRes, chatLabelsRes] = await Promise.all([
+      supabase.from('labels' as any).select('*').eq('user_id', user.id),
+      supabase.from('chat_labels' as any).select('*').eq('user_id', user.id),
+    ]);
+    setLabels(((labelsRes.data as any[]) || []) as Label[]);
+    const map: Record<string, string[]> = {};
+    ((chatLabelsRes.data as any[]) || []).forEach((cl: any) => {
+      if (!map[cl.chat_id]) map[cl.chat_id] = [];
+      map[cl.chat_id].push(cl.label_id);
     });
-    supabase.from('chat_labels' as any).select('*').eq('user_id', user.id).then(({ data }) => {
-      const map: Record<string, string[]> = {};
-      ((data as any[]) || []).forEach((cl: any) => {
-        if (!map[cl.chat_id]) map[cl.chat_id] = [];
-        map[cl.chat_id].push(cl.label_id);
-      });
-      setChatLabelMap(map);
-    });
+    setChatLabelMap(map);
+  };
+
+  useEffect(() => {
+    if (user) fetchLabels();
   }, [user]);
 
   const archivedChats = chats.filter(c => c.isArchived || c.contact.isArchived);
@@ -129,9 +136,14 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         <h1 className="text-[32px] sm:text-[28px] font-extrabold tracking-tight text-foreground ios-header">{sectionTitle}</h1>
         <div className="flex items-center gap-1">
           {viewMode === 'chats' && (
-            <Button variant="ghost" size="icon" className="h-10 w-10 text-primary" onClick={onNewChat}>
-              <SquarePen className="h-[22px] w-[22px]" />
-            </Button>
+            <>
+              <Button variant="ghost" size="icon" className="h-10 w-10 text-primary" onClick={() => setShowLabelManager(true)} title="Manage Labels">
+                <Settings2 className="h-[20px] w-[20px]" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-10 w-10 text-primary" onClick={onNewChat}>
+                <SquarePen className="h-[22px] w-[22px]" />
+              </Button>
+            </>
           )}
           {viewMode === 'contacts' && (
             <Button variant="ghost" size="icon" className="h-10 w-10 text-primary" onClick={() => setShowAddContactModal(true)}>
@@ -226,14 +238,19 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 {chatFilter === 'all' && <p className="text-[13px] mt-1">Add contacts to start chatting</p>}
               </div>
             ) : (
-              filteredChats.map(chat => (
-                <ChatListItem
-                  key={chat.id}
-                  chat={chat}
-                  isActive={activeChat?.id === chat.id}
-                  onClick={() => handleChatClick(chat)}
-                />
-              ))
+              filteredChats.map(chat => {
+                const chatLabelIds = chatLabelMap[chat.id] || [];
+                const resolvedLabels = labels.filter(l => chatLabelIds.includes(l.id));
+                return (
+                  <ChatListItem
+                    key={chat.id}
+                    chat={chat}
+                    isActive={activeChat?.id === chat.id}
+                    onClick={() => handleChatClick(chat)}
+                    chatLabels={resolvedLabels}
+                  />
+                );
+              })
             )}
           </>
         )}
@@ -273,6 +290,13 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
           </>
         )}
       </div>
+
+      {/* Label Manager Panel */}
+      <LabelManagerPanel
+        open={showLabelManager}
+        onOpenChange={setShowLabelManager}
+        onLabelsChanged={fetchLabels}
+      />
     </div>
   );
 }

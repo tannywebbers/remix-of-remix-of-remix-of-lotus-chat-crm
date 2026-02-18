@@ -118,9 +118,24 @@ export function getInitials(name: string): string {
 }
 
 export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
+  // No currency symbol — display plain number
+  return new Intl.NumberFormat('en-NG', {
+    style: 'decimal',
     maximumFractionDigits: 0,
   }).format(amount);
+}
+
+export function getCurrentDate(): string {
+  return new Date().toLocaleDateString('en-NG', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+}
+
+export function getCurrentTime(): string {
+  return new Date().toLocaleTimeString('en-NG', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }

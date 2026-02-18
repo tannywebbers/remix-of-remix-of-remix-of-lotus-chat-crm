@@ -15,11 +15,12 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "prompt",
+      injectRegister: "auto",
       includeAssets: ["favicon.ico", "pwa-192x192.png", "pwa-512x512.png"],
       manifest: {
-        name: "Lotus - WhatsApp CRM",
-        short_name: "Lotus",
-        description: "A powerful WhatsApp-based CRM for managing customers, loans, and financial records.",
+        name: "waba",
+        short_name: "waba",
+        description: "waba - WhatsApp Business Account management.",
         theme_color: "#25D366",
         background_color: "#ffffff",
         display: "standalone",
@@ -48,14 +49,17 @@ export default defineConfig(({ mode }) => ({
       workbox: {
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff2}"],
         cleanupOutdatedCaches: true,
+        // skipWaiting: false means the SW won't auto-activate — prompt handles it
         skipWaiting: false,
         clientsClaim: true,
+        // Version the cache name to prevent stale cache loops
+        cacheId: "waba-v1",
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
             handler: "NetworkFirst",
             options: {
-              cacheName: "supabase-api-cache",
+              cacheName: "waba-supabase-cache",
               expiration: {
                 maxEntries: 100,
                 maxAgeSeconds: 60 * 60 * 24,
