@@ -349,3 +349,19 @@
     stroke-width: 2.5px;
   }
 }
+
+
+@layer base {
+  input, textarea, button, select {
+    font-family: inherit;
+    font-weight: 400;
+  }
+}
+
+
+@layer components {
+  .icon-strong {
+    color: #111 !important;
+    stroke-width: 2.5px;
+  }
+}

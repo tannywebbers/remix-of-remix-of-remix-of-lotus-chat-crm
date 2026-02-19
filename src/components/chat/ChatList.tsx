@@ -184,6 +184,32 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   }, [user, fetchLabels]);
   }, [user]);
 
+  useEffect(() => {
+    if (user) {
+      fetchLabels();
+      fetchBulkTemplates();
+    }
+  }, [user, fetchLabels, fetchBulkTemplates]);
+
+  useEffect(() => {
+    const el = listContainerRef.current;
+    if (!el) return;
+    restoreListScroll();
+    const onScroll = () => persistListScroll();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [viewMode, restoreListScroll, persistListScroll]);
+
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`labels-sync-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'labels', filter: `user_id=eq.${user.id}` }, fetchLabels)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_labels', filter: `user_id=eq.${user.id}` }, fetchLabels)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, fetchLabels]);
+
   const archivedChats = chats.filter(c => c.isArchived || c.contact.isArchived);
   const archivedCount = archivedChats.length;
 
