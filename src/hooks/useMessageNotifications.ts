@@ -14,12 +14,30 @@ function playNotificationSound() {
     const settings = settingsJson ? JSON.parse(settingsJson) : { sound: true };
     if (settings.sound === false) return;
 
+    const adminTone = localStorage.getItem('admin_notification_sound') || 'default';
+
     if (!notificationAudio) {
       notificationAudio = new Audio(NOTIFICATION_SOUND_URL);
-      notificationAudio.volume = 0.5;
+      notificationAudio.preload = 'auto';
+      notificationAudio.volume = adminTone === 'iphone' ? 0.65 : adminTone === 'whatsapp' ? 0.55 : 0.5;
     }
+
     notificationAudio.currentTime = 0;
-    notificationAudio.play().catch(() => {});
+    notificationAudio.play().catch(() => {
+      // WebAudio fallback for autoplay-restricted contexts
+      const Ctx = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!Ctx) return;
+      const ctx = new Ctx();
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = adminTone === 'iphone' ? 'triangle' : 'sine';
+      o.frequency.value = adminTone === 'whatsapp' ? 880 : 740;
+      g.gain.value = 0.03;
+      o.connect(g);
+      g.connect(ctx.destination);
+      o.start();
+      o.stop(ctx.currentTime + 0.08);
+    });
   } catch {}
 }
 

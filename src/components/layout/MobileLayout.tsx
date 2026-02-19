@@ -114,13 +114,13 @@ export function MobileLayout() {
             onClick={() => setViewMode(mode)}
             className={cn(
               'relative flex flex-col items-center gap-0.5 px-6 py-2 min-w-[72px] transition-colors',
-              viewMode === mode ? 'text-primary' : 'text-muted-foreground'
+              'text-black'
             )}
           >
             {imgSrc ? (
               <img src={imgSrc} alt={label} className={cn(
                 "h-[26px] w-[26px] object-contain",
-                viewMode === mode ? "opacity-100" : "opacity-50"
+                viewMode === mode ? "opacity-100" : "opacity-75"
               )} />
             ) : (
               <svg className={cn("h-[26px] w-[26px]", viewMode === mode && "stroke-[2.5px]")} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

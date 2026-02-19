@@ -1,12 +1,12 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Chat } from '@/types';
 import { ContactAvatar } from '@/components/shared/ContactAvatar';
 import { MessageStatus } from '@/components/shared/MessageStatus';
 import { formatChatTime } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
-import { Pin, BellOff, Archive, Trash2, MessageSquareOff, Star } from 'lucide-react';
+import { Pin, BellOff, Archive, Trash2, MessageSquareOff, Star, Tag } from 'lucide-react';
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -14,6 +14,7 @@ import {
 import { useAppStore } from '@/store/appStore';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 
 interface Label {
   id: string;
@@ -26,9 +27,10 @@ interface ChatListItemProps {
   isActive: boolean;
   onClick: () => void;
   chatLabels?: Label[];
+  allLabels?: Label[];
 }
 
-export function ChatListItem({ chat, isActive, onClick, chatLabels = [] }: ChatListItemProps) {
+export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabels: providedLabels = [] }: ChatListItemProps) {
   const { contact, lastMessage, unreadCount, isPinned, isMuted, isArchived } = chat;
   const { updateContact, setMessages, chats, setChats, favorites, toggleFavorite } = useAppStore();
   const { toast } = useToast();
@@ -37,6 +39,9 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [] }: ChatL
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const [isLongPress, setIsLongPress] = useState(false);
   const isFav = favorites[chat.id];
+  const { user } = useAuth();
+  const [allLabels, setAllLabels] = useState<Label[]>(providedLabels);
+  const [assignedLabelIds, setAssignedLabelIds] = useState<string[]>(chatLabels.map(l => l.id));
 
   // Touch intent system — prevent accidental click during scroll
   const touchStartY = useRef<number>(0);
@@ -111,6 +116,46 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [] }: ChatL
     setShowOptions(false);
   };
   
+
+  useEffect(() => {
+    setAllLabels(providedLabels);
+    setAssignedLabelIds(chatLabels.map(l => l.id));
+  }, [chatLabels, providedLabels]);
+
+  const loadLabelsForMenu = async () => {
+    if (!user) return;
+    const [labelsRes, assignedRes] = await Promise.all([
+      allLabels.length === 0
+        ? supabase.from('labels' as any).select('*').eq('user_id', user.id).order('name', { ascending: true })
+        : Promise.resolve({ data: allLabels } as any),
+      supabase
+        .from('chat_labels' as any)
+        .select('label_id')
+        .eq('user_id', user.id)
+        .eq('chat_id', chat.id),
+    ]);
+
+    setAllLabels(((labelsRes?.data as any[]) || []) as Label[]);
+    setAssignedLabelIds((((assignedRes?.data as any[]) || []).map((x: any) => x.label_id)));
+  };
+
+  const toggleLabelAssignment = async (labelId: string, checked: boolean) => {
+    if (!user) return;
+    try {
+      if (checked) {
+        const { error } = await supabase.from('chat_labels' as any).insert({ user_id: user.id, chat_id: chat.id, label_id: labelId } as any);
+        if (error && !String(error.message || '').includes('duplicate key')) throw error;
+        setAssignedLabelIds(prev => [...new Set([...prev, labelId])]);
+      } else {
+        const { error } = await supabase.from('chat_labels' as any).delete().eq('user_id', user.id).eq('chat_id', chat.id).eq('label_id', labelId);
+        if (error) throw error;
+        setAssignedLabelIds(prev => prev.filter(id => id !== labelId));
+      }
+    } catch (error: any) {
+      toast({ title: 'Failed to update labels', description: error.message, variant: 'destructive' });
+    }
+  };
+
   const hasUnread = unreadCount > 0;
 
   return (
@@ -134,15 +179,14 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [] }: ChatL
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1.5 min-w-0">
                 <span className={cn(
-                  'text-[17px] truncate text-foreground',
-                  hasUnread ? 'font-bold' : 'font-semibold'
+                  'text-[17px] truncate text-foreground font-normal'
                 )}>{contact.name}</span>
               </div>
               <div className="flex items-center gap-1 shrink-0 ml-2">
                 {lastMessage && (
                   <span className={cn(
                     'text-[13px]',
-                    hasUnread ? 'text-primary font-semibold' : 'text-muted-foreground'
+                    hasUnread ? 'text-primary font-normal' : 'text-muted-foreground'
                   )}>
                     {formatChatTime(lastMessage.timestamp)}
                   </span>
@@ -156,8 +200,8 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [] }: ChatL
                   <MessageStatus status={lastMessage.status} className="h-[16px] w-[16px]" />
                 )}
                 <span className={cn(
-                  'text-[15px] truncate leading-tight',
-                  hasUnread ? 'text-foreground font-semibold' : 'text-muted-foreground'
+                  'text-[15px] truncate leading-tight font-normal',
+                  hasUnread ? 'text-foreground' : 'text-muted-foreground'
                 )}>
                   {lastMessage?.content || 'No messages yet'}
                 </span>
@@ -187,7 +231,7 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [] }: ChatL
           </div>
         </button>
 
-        <DropdownMenu open={showOptions} onOpenChange={setShowOptions}>
+        <DropdownMenu open={showOptions} onOpenChange={(open) => { setShowOptions(open); if (open) loadLabelsForMenu(); }}>
           <DropdownMenuTrigger asChild>
             <span className="sr-only">Options</span>
           </DropdownMenuTrigger>
@@ -208,6 +252,26 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [] }: ChatL
               <Archive className="h-4 w-4 mr-3" />
               {(isArchived || contact.isArchived) ? 'Unarchive chat' : 'Archive chat'}
             </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Tag className="h-4 w-4 mr-3" />
+                Labels
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="w-52">
+                {allLabels.length === 0 ? (
+                  <DropdownMenuItem disabled>No labels created</DropdownMenuItem>
+                ) : allLabels.map((label) => (
+                  <DropdownMenuCheckboxItem
+                    key={label.id}
+                    checked={assignedLabelIds.includes(label.id)}
+                    onCheckedChange={(checked) => toggleLabelAssignment(label.id, checked === true)}
+                  >
+                    <span className="mr-2 inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: label.color }} />
+                    {label.name}
+                  </DropdownMenuCheckboxItem>
+                ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
             <DropdownMenuSeparator />
             <DropdownMenuItem 
               onClick={() => setShowDeleteDialog(true)} 

@@ -9,6 +9,7 @@ import { usePresenceRefresh } from '@/hooks/usePresenceRefresh';
 import { pushNotificationManager } from '@/lib/pushNotificationsManager-simple';
 import { initializePushNotifications, setupForegroundMessages } from '@/lib/firebase';
 import { lazy, Suspense, useEffect } from "react";
+import { useTabBadge } from '@/hooks/useTabBadge';
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
@@ -62,6 +63,7 @@ function AppRoutes() {
 
   // 🔔 Desktop/Local Notifications
   useMessageNotifications();
+  useTabBadge();
 
   // 🟢 Auto-refresh online status every 30s
   usePresenceRefresh();
