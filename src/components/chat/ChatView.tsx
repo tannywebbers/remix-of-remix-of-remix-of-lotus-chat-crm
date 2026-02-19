@@ -217,17 +217,24 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     } finally { setSending(false); }
   };
 
+
   const getExtensionFromMime = (mimeType: string) => {
     if (mimeType.includes('ogg')) return 'ogg';
     if (mimeType.includes('mpeg')) return 'mp3';
     if (mimeType.includes('mp4')) return 'm4a';
     if (mimeType.includes('wav')) return 'wav';
+    if (mimeType.includes('webm')) return 'mp3';
     if (mimeType.includes('webm')) return 'webm';
     return 'bin';
   };
 
   const getAudioDeliveryType = (mimeType: string): 'audio' | 'document' => {
     const normalized = mimeType.toLowerCase();
+    // WhatsApp Cloud API accepts OGG(OPUS), MP3, AAC(M4A), AMR for audio messages.
+    if (normalized.includes('ogg') || normalized.includes('mpeg') || normalized.includes('mp4') || normalized.includes('amr')) {
+      return 'audio';
+    }
+    // Unsupported audio mime (e.g. webm) fallback to document to ensure delivery.
     if (normalized.includes('ogg') || normalized.includes('mpeg') || normalized.includes('mp4') || normalized.includes('amr')) {
       return 'audio';
     }
@@ -243,6 +250,8 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       const fileExt = (file.name.split('.').pop() || extFromMime).toLowerCase();
       const filePath = `${user.id}/${activeChat.id}/${Date.now()}.${fileExt}`;
       const { error: uploadError } = await supabase.storage.from('chat-media').upload(filePath, file, {
+        contentType: mimeType,
+        upsert: false,
         contentType: mimeType, upsert: false,
       });
       if (uploadError) throw uploadError;
@@ -250,6 +259,13 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       const mediaUrl = urlData.publicUrl;
 
       const msgType = type === 'audio' ? getAudioDeliveryType(mimeType) : type;
+      const whatsappMessageId = await sendMessageToWhatsApp(file.name, msgType as any, mediaUrl, {
+        fileName: file.name,
+        mimeType,
+      });
+
+      if (type === 'audio' && msgType === 'document') {
+        toast({ title: 'Voice sent as file', description: 'This browser produced an unsupported WhatsApp audio codec, so it was delivered as a document.' });
       const whatsappMessageId = await sendMessageToWhatsApp(file.name, msgType as 'audio' | 'document' | 'image', mediaUrl, {
         fileName: file.name, mimeType,
       });
@@ -354,6 +370,10 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
   if (!activeChat) {
     return (
+      <div className="flex-1 flex items-center justify-center chat-background">
+        <div className="text-center animate-fade-in">
+          <MessageCircle className="w-14 h-14 text-primary/70 mx-auto mb-3" />
+          <h2 className="text-[22px] font-medium text-foreground/80 mb-1">{localStorage.getItem('admin_app_name') || 'waba'}</h2>
       <div className="flex-1 flex items-center justify-center" style={{ backgroundImage: `url(${chatBg})`, backgroundSize: 'cover', backgroundPosition: 'center' }}>
         <div className="text-center animate-fade-in bg-white/80 dark:bg-black/60 p-8 rounded-2xl backdrop-blur-sm">
           <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-primary/10 flex items-center justify-center">
@@ -419,11 +439,13 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
   return (
     <div className="flex flex-col h-full min-h-0 font-medium">
+      {/* Header */}
+      <div className="flex items-center justify-between px-1 sm:px-3 py-[6px] bg-panel-header border-b border-panel-border shrink-0">
       {/* Header — always fixed/sticky */}
       <div className="flex items-center justify-between px-1 sm:px-3 py-[6px] bg-panel-header border-b border-panel-border shrink-0 z-10">
         <div className="flex items-center gap-1 min-w-0">
           {showBackButton && (
-            <Button variant="ghost" size="icon" onClick={onBack} className="h-9 w-9 shrink-0 text-primary">
+            <Button variant="ghost" size="icon" onClick={onBack} className="h-9 w-9 shrink-0 text-black">
               <ArrowLeft className="h-6 w-6" />
             </Button>
           )}
@@ -443,7 +465,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         <div className="flex items-center shrink-0">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9 text-muted-foreground"><MoreVertical className="h-5 w-5" /></Button>
+              <Button variant="ghost" size="icon" className="h-9 w-9 text-black"><MoreVertical className="h-5 w-5 stroke-[2.6px]" /></Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
               <DropdownMenuItem onClick={() => setShowContactPanel(true)}><Info className="h-4 w-4 mr-3" /> Contact info</DropdownMenuItem>
@@ -463,6 +485,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       </div>
 
       {/* Messages */}
+      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto chat-background px-3 py-2 custom-scrollbar min-h-0">
       <div
         ref={messagesContainerRef}
         className="flex-1 overflow-y-auto px-3 py-2 custom-scrollbar min-h-0"
@@ -528,7 +551,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         <div className="flex items-end gap-1.5 max-w-3xl mx-auto">
           {recorderState.state === 'idle' && (
             <>
-              <FileUploadButton onFileSelect={(file, type) => handleFileUpload(file, type)} uploading={uploading} />
+              <div className="text-black"><FileUploadButton onFileSelect={(file, type) => handleFileUpload(file, type)} uploading={uploading} /></div>
               <UnifiedTemplateSelector
                 contact={contact}
                 onSelectMetaTemplate={handleTemplateSelect}
@@ -545,6 +568,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
             <VoiceRecorderButton
               onRecordingComplete={(blob) => {
                 const mimeType = blob.type || 'audio/ogg;codecs=opus';
+                const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mpeg') ? 'mp3' : mimeType.includes('mp4') ? 'm4a' : mimeType.includes('amr') ? 'amr' : 'mp3';
                 const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mpeg') ? 'mp3' : mimeType.includes('mp4') ? 'm4a' : mimeType.includes('webm') ? 'webm' : 'ogg';
                 const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mimeType });
                 handleFileUpload(file, 'audio');
@@ -553,7 +577,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
             />
           ) : (
             <>
-              <div className="flex-1 flex items-end bg-background rounded-[20px] px-3 py-1 border border-input shadow-sm">
+              <div className="flex-1 flex items-end bg-background rounded-[30px] px-3 py-1 border border-input shadow-sm">
                 <textarea
                   ref={inputRef}
                   value={inputValue}
@@ -583,6 +607,8 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                 <VoiceRecorderButton
                   onRecordingComplete={(blob) => {
                     const mimeType = blob.type || 'audio/ogg;codecs=opus';
+                const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mpeg') ? 'mp3' : mimeType.includes('mp4') ? 'm4a' : mimeType.includes('amr') ? 'amr' : 'mp3';
+                const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mimeType });
                     const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mpeg') ? 'mp3' : mimeType.includes('mp4') ? 'm4a' : mimeType.includes('webm') ? 'webm' : 'ogg';
                     const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: mimeType });
                     handleFileUpload(file, 'audio');

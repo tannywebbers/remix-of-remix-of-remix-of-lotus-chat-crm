@@ -57,6 +57,7 @@ export function applyAdminAppearance() {
   root.style.setProperty('--primary', hexToHsl(settings.primaryColor));
   root.dataset.appName = settings.appName;
 
+  root.style.setProperty('--admin-font-family', "'SF Pro Text', 'SF Pro Display', 'Roboto', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI', sans-serif");
   root.style.setProperty('--admin-font-family', "'SF Pro Text', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI', sans-serif");
   if (settings.fontFamily === 'inter') {
     root.style.setProperty('--admin-font-family', "Inter, 'SF Pro Text', -apple-system, sans-serif");

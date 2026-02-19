@@ -155,6 +155,7 @@
 
   body {
     @apply bg-background text-foreground antialiased;
+    font-family: var(--admin-font-family, 'SF Pro Text', 'SF Pro Display', 'Roboto', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', 'Segoe UI', Arial, sans-serif);
     /* SF Pro Text (chat) / Roboto (global fallback) — weight 400 globally */
     font-family: var(--admin-font-family, 'SF Pro Text', -apple-system, BlinkMacSystemFont, 'Roboto', 'Helvetica Neue', 'Segoe UI', Arial, sans-serif);
     font-weight: 400;
@@ -184,6 +185,9 @@
 @layer components {
   /* Message Bubbles — 15px border radius as requested */
   .message-bubble {
+    @apply relative px-3 py-[7px] max-w-[85%] sm:max-w-[78%] lg:max-w-[58%] xl:max-w-[52%] shadow-sm;
+    border-radius: 7px;
+    line-height: 1.32;
     @apply relative px-3 py-[7px] max-w-[80%] sm:max-w-[72%] lg:max-w-[62%] shadow-sm;
     border-radius: 15px;
     line-height: 1.4;
@@ -225,6 +229,14 @@
     border-right: 8px solid hsl(var(--bubble-incoming));
     border-top: 0px solid transparent;
     border-bottom: 10px solid transparent;
+  }
+  
+  /* Chat Pattern Background */
+  .chat-background {
+    background-color: hsl(var(--chat-bg));
+    background-image: var(--chat-pattern);
+    background-attachment: fixed;
+    background-position: center;
   }
   
   /* iOS Settings Row */
@@ -319,5 +331,21 @@
   input, textarea, button, select {
     font-family: inherit;
     font-weight: 400;
+  }
+}
+
+
+@layer base {
+  input, textarea, button, select {
+    font-family: inherit;
+    font-weight: 400;
+  }
+}
+
+
+@layer components {
+  .icon-strong {
+    color: #111 !important;
+    stroke-width: 2.5px;
   }
 }

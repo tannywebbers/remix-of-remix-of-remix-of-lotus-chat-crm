@@ -3,6 +3,15 @@ import App from "./App.tsx";
 import "./index.css";
 import { applyAdminAppearance } from '@/lib/adminAppearance';
 
+const SW_VERSION = import.meta.env.VITE_APP_VERSION || '1';
+const SW_CACHE_PREFIX = `lotus-${SW_VERSION}`;
+
+applyAdminAppearance();
+window.addEventListener('storage', (event) => {
+  if (event.key?.startsWith('admin_')) applyAdminAppearance();
+});
+
+
 applyAdminAppearance();
 window.addEventListener('storage', (event) => {
   if (event.key?.startsWith('admin_')) applyAdminAppearance();
@@ -15,6 +24,10 @@ if ('serviceWorker' in navigator) {
       const registration = await navigator.serviceWorker.register('/sw.js');
       console.log('✅ Service Worker registered:', registration.scope);
 
+      const applyWaitingUpdate = () => {
+        const waiting = registration.waiting;
+        if (!waiting) return;
+        waiting.postMessage({ type: 'SKIP_WAITING' });
       // Auto-apply any waiting update without prompting user
       const applyUpdate = (sw: ServiceWorker) => {
         sw.postMessage({ type: 'SKIP_WAITING' });
@@ -25,6 +38,17 @@ if ('serviceWorker' in navigator) {
         if (!installing) return;
         installing.addEventListener('statechange', () => {
           if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+            applyWaitingUpdate();
+          }
+        });
+      });
+
+      if (registration.waiting) applyWaitingUpdate();
+
+      setInterval(() => {
+        registration.update();
+      }, 5 * 60 * 1000);
+
             applyUpdate(installing);
           }
         });
@@ -50,6 +74,12 @@ if ('serviceWorker' in navigator) {
         window.location.reload();
       });
 
+      const cacheKeys = await caches.keys();
+      await Promise.all(
+        cacheKeys
+          .filter((key) => key.startsWith('lotus-') && !key.startsWith(SW_CACHE_PREFIX))
+          .map((key) => caches.delete(key)),
+      );
       // Check for updates periodically
       setInterval(() => { registration.update(); }, 5 * 60 * 1000);
     } catch (error) {
@@ -69,6 +99,10 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+let deferredPrompt: any;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
 let deferredPrompt: Event & { prompt?: () => void } | null = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();

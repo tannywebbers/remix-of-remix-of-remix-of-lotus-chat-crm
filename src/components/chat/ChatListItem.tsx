@@ -27,9 +27,10 @@ interface ChatListItemProps {
   isActive: boolean;
   onClick: () => void;
   chatLabels?: Label[];
+  allLabels?: Label[];
 }
 
-export function ChatListItem({ chat, isActive, onClick, chatLabels = [] }: ChatListItemProps) {
+export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabels: providedLabels = [] }: ChatListItemProps) {
   const { contact, lastMessage, unreadCount, isPinned, isMuted, isArchived } = chat;
   const { updateContact, setMessages, chats, setChats, favorites, toggleFavorite } = useAppStore();
   const { toast } = useToast();
@@ -39,6 +40,7 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [] }: ChatL
   const [isLongPress, setIsLongPress] = useState(false);
   const isFav = favorites[chat.id];
   const { user } = useAuth();
+  const [allLabels, setAllLabels] = useState<Label[]>(providedLabels);
   const [allLabels, setAllLabels] = useState<Label[]>(chatLabels);
   const [assignedLabelIds, setAssignedLabelIds] = useState<string[]>(chatLabels.map(l => l.id));
 
@@ -117,6 +119,19 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [] }: ChatL
   
 
   useEffect(() => {
+    setAllLabels(providedLabels);
+    setAssignedLabelIds(chatLabels.map(l => l.id));
+  }, [chatLabels, providedLabels]);
+
+  const loadLabelsForMenu = async () => {
+    if (!user) return;
+    const { data: assignedRes } = await supabase
+      .from('chat_labels' as any)
+      .select('label_id')
+      .eq('user_id', user.id)
+      .eq('chat_id', chat.id);
+
+    setAssignedLabelIds((((assignedRes as any[]) || []).map((x: any) => x.label_id)));
     setAllLabels(chatLabels);
     setAssignedLabelIds(chatLabels.map(l => l.id));
   }, [chatLabels]);
