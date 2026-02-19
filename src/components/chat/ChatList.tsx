@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { MessageCircle, Users, Plus, SquarePen, Archive, Tag, SortAsc, SortDesc, Settings2, CheckSquare, Trash2, Send } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { MessageCircle, Users, Plus, SquarePen, Archive, Tag, SortAsc, SortDesc, Settings2 } from 'lucide-react';
 import { useAppStore } from '@/store/appStore';
 import { SearchInput } from '@/components/shared/SearchInput';
 import { ChatListItem } from '@/components/chat/ChatListItem';
@@ -95,6 +97,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
   const [chatLabelMap, setChatLabelMap] = useState<Record<string, string[]>>({});
   const [showLabelManager, setShowLabelManager] = useState(false);
+  const listContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [contactSelectionMode, setContactSelectionMode] = useState(false);
   const [selectedContactIds, setSelectedContactIds] = useState<string[]>([]);
@@ -105,6 +108,16 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const [metaTemplates, setMetaTemplates] = useState<MetaTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [sendingBulk, setSendingBulk] = useState(false);
+  const restoreListScroll = useCallback(() => {
+    const key = viewMode === 'contacts' ? 'lotus_contacts_scroll' : 'lotus_chats_scroll';
+    const saved = Number(sessionStorage.getItem(key) || '0');
+    if (listContainerRef.current) listContainerRef.current.scrollTop = saved;
+  }, [viewMode]);
+
+  const persistListScroll = useCallback(() => {
+    const key = viewMode === 'contacts' ? 'lotus_contacts_scroll' : 'lotus_chats_scroll';
+    if (listContainerRef.current) sessionStorage.setItem(key, String(listContainerRef.current.scrollTop));
+  }, [viewMode]);
 
   const listContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -169,6 +182,33 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [user, fetchLabels]);
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      fetchLabels();
+      fetchBulkTemplates();
+    }
+  }, [user, fetchLabels, fetchBulkTemplates]);
+
+  useEffect(() => {
+    const el = listContainerRef.current;
+    if (!el) return;
+    restoreListScroll();
+    const onScroll = () => persistListScroll();
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [viewMode, restoreListScroll, persistListScroll]);
+
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`labels-sync-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'labels', filter: `user_id=eq.${user.id}` }, fetchLabels)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_labels', filter: `user_id=eq.${user.id}` }, fetchLabels)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, fetchLabels]);
 
   const archivedChats = chats.filter(c => c.isArchived || c.contact.isArchived);
   const archivedCount = archivedChats.length;
@@ -181,6 +221,8 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       if (chatFilter === 'archived') return chat.isArchived || chat.contact.isArchived;
       if (chat.isArchived || chat.contact.isArchived) return false;
       if (chatFilter === 'unread') return chat.unreadCount > 0;
+
+      // Label filter
       if (selectedLabelId) {
         const chatLabels = chatLabelMap[chat.id] || [];
         if (!chatLabels.includes(selectedLabelId)) return false;
@@ -478,6 +520,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         </div>
       )}
 
+      {/* Content */}
       <div ref={listContainerRef} className="flex-1 overflow-y-auto custom-scrollbar">
         {viewMode === 'chats' && (
           <>
@@ -485,6 +528,9 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4">
                 <MessageCircle className="h-14 w-14 mb-3 opacity-40" />
                 <p className="text-[15px] font-medium">{chatFilter === 'unread' ? 'No unread messages' : chatFilter === 'archived' ? 'No archived chats' : 'No chats yet'}</p>
+                <p className="text-[15px] font-medium">
+                  {chatFilter === 'unread' ? 'No unread messages' : chatFilter === 'archived' ? 'No archived chats' : 'No chats yet'}
+                </p>
                 {chatFilter === 'all' && <p className="text-[13px] mt-1">Add contacts to start chatting</p>}
               </div>
             ) : (
@@ -542,6 +588,16 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                         setViewMode('chats');
                       }
                     }}
+                  key={contact.id}
+                  contact={contact}
+                  labels={resolvedContactLabels}
+                  onClick={() => {
+                    const chat = chats.find(c => c.contact.id === contact.id);
+                    if (chat) {
+                      handleChatClick(chat);
+                      setViewMode('chats');
+                    }
+                  }}
                   />
                 );
               })

@@ -20,7 +20,7 @@ interface NewChatModalProps {
 }
 
 export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalProps) {
-  const { contacts, chats, addContact } = useAppStore();
+  const { contacts, chats, addContact, setActiveChat, setViewMode } = useAppStore();
   const { user } = useAuth();
   const { toast } = useToast();
   const [search, setSearch] = useState('');
@@ -32,11 +32,21 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
   );
 
   const handleSelect = (contact: Contact) => {
+    // Find existing chat or create one in state
+    const existingChat = chats.find(c => c.contact.id === contact.id);
+    if (existingChat) {
+      setActiveChat(existingChat);
+    } else {
+      // New contact — create chat entry
+      const newChat = { id: contact.id, contact, unreadCount: 0 };
+      setActiveChat(newChat);
+    }
+    setViewMode('chats');
     onSelectContact(contact);
     setSearch('');
+    onClose();
   };
 
-  // Quick start chat by phone number
   const isPhoneNumber = /^\+?\d{7,15}$/.test(search.replace(/\s/g, ''));
   const existingContactForPhone = contacts.find(c => c.phone === search.replace(/\s/g, ''));
 
@@ -44,7 +54,6 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
     if (!user || !isPhoneNumber) return;
     const phone = search.replace(/\s/g, '');
 
-    // Check if contact exists
     if (existingContactForPhone) {
       handleSelect(existingContactForPhone);
       return;
@@ -67,10 +76,11 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
         isPinned: false, isMuted: false, isArchived: false,
       };
       addContact(newContact);
+      // Open chat directly after adding
       handleSelect(newContact);
       toast({ title: 'Quick chat created' });
-    } catch (err: any) {
-      toast({ title: 'Failed to create quick chat', description: err.message, variant: 'destructive' });
+    } catch (err: unknown) {
+      toast({ title: 'Failed to create quick chat', description: (err as Error).message, variant: 'destructive' });
     } finally {
       setCreatingQuickChat(false);
     }
@@ -91,11 +101,11 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
+              autoFocus
             />
           </div>
         </div>
 
-        {/* Quick chat by phone */}
         {isPhoneNumber && !existingContactForPhone && (
           <div className="px-4 pb-2">
             <button
@@ -108,7 +118,7 @@ export function NewChatModal({ open, onClose, onSelectContact }: NewChatModalPro
               </div>
               <div className="text-left">
                 <p className="font-medium text-primary">Chat with {search}</p>
-                <p className="text-xs text-muted-foreground">Start a conversation with this number</p>
+                <p className="text-xs text-muted-foreground">{creatingQuickChat ? 'Creating...' : 'Start a conversation with this number'}</p>
               </div>
             </button>
           </div>

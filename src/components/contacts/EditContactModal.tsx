@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { X, Plus, Trash2 } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,13 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { useAppStore } from '@/store/appStore';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
@@ -40,27 +33,42 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
   
   const contact = contacts.find(c => c.id === contactId);
   
+  // Use refs so closing/switching tabs doesn't reset the form
   const [formData, setFormData] = useState({
     loanId: '',
     name: '',
     phone: '',
     amount: '',
     appType: 'tloan',
+    appTypeCustom: '',
     dayType: '0',
   });
   const [accountDetails, setAccountDetails] = useState<AccountDetail[]>([]);
+  const initializedRef = useRef(false);
 
+  // Only initialize once when modal opens (not on every re-render)
   useEffect(() => {
-    if (contact && open) {
+    if (contact && open && !initializedRef.current) {
+      initializedRef.current = true;
       setFormData({
         loanId: contact.loanId || '',
         name: contact.name || '',
         phone: contact.phone || '',
         amount: contact.amount?.toString() || '',
         appType: contact.appType || 'tloan',
+        appTypeCustom: '',
         dayType: contact.dayType?.toString() || '0',
       });
-      setAccountDetails(contact.accountDetails || []);
+      setAccountDetails(contact.accountDetails?.map(ad => ({
+        id: ad.id,
+        bank: ad.bank || '',
+        accountNumber: ad.accountNumber || '',
+        accountName: ad.accountName || '',
+      })) || []);
+    }
+
+    if (!open) {
+      initializedRef.current = false;
     }
   }, [contact, open]);
 
@@ -68,8 +76,9 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
     if (!contact) return;
     setLoading(true);
 
+    const resolvedAppType = formData.appType === 'others' ? (formData.appTypeCustom.trim() || 'others') : formData.appType;
+
     try {
-      // Update contact
       const { error: contactError } = await supabase
         .from('contacts')
         .update({
@@ -77,46 +86,43 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
           name: formData.name,
           phone: formData.phone,
           amount: formData.amount ? parseFloat(formData.amount) : null,
-          app_type: formData.appType,
+          app_type: resolvedAppType,
           day_type: parseInt(formData.dayType),
         })
         .eq('id', contactId);
 
       if (contactError) throw contactError;
 
-      // Delete existing account details
-      await supabase
-        .from('account_details')
-        .delete()
-        .eq('contact_id', contactId);
+      await supabase.from('account_details').delete().eq('contact_id', contactId);
 
-      // Insert new account details
       if (accountDetails.length > 0) {
         const { error: accountError } = await supabase
           .from('account_details')
           .insert(
-            accountDetails.map(ad => ({
-              contact_id: contactId,
-              bank: ad.bank,
-              account_number: ad.accountNumber,
-              account_name: ad.accountName,
-            }))
+            accountDetails
+              .filter(ad => ad.bank.trim() || ad.accountNumber.trim())
+              .map(ad => ({
+                contact_id: contactId,
+                bank: ad.bank,
+                account_number: ad.accountNumber,
+                account_name: ad.accountName,
+              }))
           );
-
         if (accountError) throw accountError;
       }
 
-      // Update local state
       updateContact(contactId, {
         loanId: formData.loanId,
         name: formData.name,
         phone: formData.phone,
         amount: formData.amount ? parseFloat(formData.amount) : undefined,
-        appType: formData.appType,
+        appType: resolvedAppType,
         dayType: parseInt(formData.dayType),
         accountDetails: accountDetails.map((ad, idx) => ({
-          id: `temp-${idx}`,
-          ...ad,
+          id: ad.id || `temp-${idx}`,
+          bank: ad.bank,
+          accountNumber: ad.accountNumber,
+          accountName: ad.accountName,
         })),
       });
 
@@ -139,9 +145,7 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
   };
 
   const updateAccountDetail = (index: number, field: keyof AccountDetail, value: string) => {
-    setAccountDetails(accountDetails.map((ad, i) => 
-      i === index ? { ...ad, [field]: value } : ad
-    ));
+    setAccountDetails(accountDetails.map((ad, i) => i === index ? { ...ad, [field]: value } : ad));
   };
 
   if (!contact) return null;
@@ -156,66 +160,54 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>Loan ID</Label>
-            <Input
-              value={formData.loanId}
-              onChange={(e) => setFormData({ ...formData, loanId: e.target.value })}
-              placeholder="Enter loan ID"
-            />
+            <Input value={formData.loanId} onChange={(e) => setFormData({ ...formData, loanId: e.target.value })} placeholder="Enter loan ID" />
           </div>
 
           <div className="space-y-2">
             <Label>Customer Name</Label>
-            <Input
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="Enter customer name"
-            />
+            <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Enter customer name" />
           </div>
 
           <div className="space-y-2">
             <Label>Phone Number</Label>
-            <Input
-              value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-              placeholder="Enter phone number"
-            />
+            <Input value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="Enter phone number" />
           </div>
 
           <div className="space-y-2">
             <Label>Amount</Label>
-            <Input
-              type="number"
-              value={formData.amount}
-              onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-              placeholder="Enter amount"
-            />
+            <Input type="number" value={formData.amount} onChange={(e) => setFormData({ ...formData, amount: e.target.value })} placeholder="Enter amount" />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>App Type</Label>
-              <Select value={formData.appType} onValueChange={(v) => setFormData({ ...formData, appType: v })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="tloan">Tloan</SelectItem>
-                  <SelectItem value="quickash">Quickash</SelectItem>
-                </SelectContent>
-              </Select>
+              <select
+                value={formData.appType}
+                onChange={(e) => setFormData({ ...formData, appType: e.target.value })}
+                className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="tloan">Tloan</option>
+                <option value="quickash">Quickash</option>
+                <option value="others">Others</option>
+              </select>
+              {formData.appType === 'others' && (
+                <Input
+                  placeholder="Enter app name"
+                  value={formData.appTypeCustom}
+                  onChange={(e) => setFormData({ ...formData, appTypeCustom: e.target.value })}
+                />
+              )}
             </div>
 
             <div className="space-y-2">
               <Label>Day Type</Label>
-              <Select value={formData.dayType} onValueChange={(v) => setFormData({ ...formData, dayType: v })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="-1">-1 Day</SelectItem>
-                  <SelectItem value="0">0 Day</SelectItem>
-                </SelectContent>
-              </Select>
+              <Input
+                type="number"
+                value={formData.dayType}
+                onChange={(e) => setFormData({ ...formData, dayType: e.target.value })}
+                placeholder="0"
+              />
+              <p className="text-[11px] text-muted-foreground">Can be negative (e.g. -1)</p>
             </div>
           </div>
 
