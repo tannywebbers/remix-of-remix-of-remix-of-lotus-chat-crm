@@ -3,38 +3,21 @@ import App from "./App.tsx";
 import "./index.css";
 import { applyAdminAppearance } from '@/lib/adminAppearance';
 
-const SW_VERSION = import.meta.env.VITE_APP_VERSION || '1';
-const SW_CACHE_PREFIX = `lotus-${SW_VERSION}`;
-
 applyAdminAppearance();
 window.addEventListener('storage', (event) => {
   if (event.key?.startsWith('admin_')) applyAdminAppearance();
 });
 
+// Register service worker — NO prompt, just silently update
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
       const registration = await navigator.serviceWorker.register('/sw.js');
       console.log('✅ Service Worker registered:', registration.scope);
 
-      const applyWaitingUpdate = () => {
-        const waiting = registration.waiting;
-        if (!waiting) return;
-        waiting.postMessage({ type: 'SKIP_WAITING' });
-      };
-
-
-      const promptKey = `lotus_sw_prompted_${SW_VERSION}`;
-
-      const maybePromptUpdate = () => {
-        const waiting = registration.waiting;
-        if (!waiting || localStorage.getItem(promptKey) === '1') return;
-
-        const confirmed = window.confirm('New version available. Update now?');
-        if (confirmed) {
-          waiting.postMessage({ type: 'SKIP_WAITING' });
-          localStorage.setItem(promptKey, '1');
-        }
+      // Auto-apply any waiting update without prompting user
+      const applyUpdate = (sw: ServiceWorker) => {
+        sw.postMessage({ type: 'SKIP_WAITING' });
       };
 
       registration.addEventListener('updatefound', () => {
@@ -42,43 +25,40 @@ if ('serviceWorker' in navigator) {
         if (!installing) return;
         installing.addEventListener('statechange', () => {
           if (installing.state === 'installed' && navigator.serviceWorker.controller) {
-            applyWaitingUpdate();
+            applyUpdate(installing);
           }
         });
       });
 
-      if (registration.waiting) applyWaitingUpdate();
-            maybePromptUpdate();
-          }
-        });
-      });
+      if (registration.waiting) {
+        applyUpdate(registration.waiting);
+      }
 
-      if (registration.waiting) maybePromptUpdate();
+      // Clean up old caches
+      const cacheKeys = await caches.keys();
+      await Promise.all(
+        cacheKeys
+          .filter((key) => key.startsWith('lotus-'))
+          .map((key) => caches.delete(key)),
+      );
 
-      setInterval(() => {
-        registration.update();
-      }, 5 * 60 * 1000);
-
+      // Controller change = reload once
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;
         refreshing = true;
-        localStorage.removeItem(promptKey);
         window.location.reload();
       });
 
-      const cacheKeys = await caches.keys();
-      await Promise.all(
-        cacheKeys
-          .filter((key) => key.startsWith('lotus-') && !key.startsWith(SW_CACHE_PREFIX))
-          .map((key) => caches.delete(key)),
-      );
+      // Check for updates periodically
+      setInterval(() => { registration.update(); }, 5 * 60 * 1000);
     } catch (error) {
       console.error('❌ Service Worker registration failed:', error);
     }
   });
 }
 
+// Play notification sound when SW sends PLAY_SOUND message
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data?.type === 'PLAY_SOUND') {
@@ -89,10 +69,10 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-let deferredPrompt: any;
+let deferredPrompt: Event & { prompt?: () => void } | null = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
-  deferredPrompt = e;
+  deferredPrompt = e as Event & { prompt?: () => void };
 });
 window.addEventListener('appinstalled', () => {
   deferredPrompt = null;
