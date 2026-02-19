@@ -365,3 +365,26 @@
     stroke-width: 2.5px;
   }
 }
+
+/* Global typography overrides */
+body {
+  font-family: 'SF Pro Text', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Roboto', 'Helvetica Neue', 'Segoe UI', Arial, sans-serif;
+  font-weight: 400;
+}
+
+.message-bubble,
+.message-bubble * {
+  font-family: 'SF Pro Text', 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Roboto', 'Helvetica Neue', Arial, sans-serif;
+  font-weight: 500;
+}
+
+/* Strong black navigation/chat icon styling */
+nav button,
+.chat-icon-strong {
+  color: #000;
+  font-weight: 700;
+}
+
+.chat-background {
+  background-attachment: fixed !important;
+}

@@ -1,9 +1,8 @@
 /**
- * GLOBAL VOICE RECORDER CONTROLLER
- * Persistent recording state that survives component unmounts.
+ * Global voice recorder controller.
  */
 
-type RecordingState = 'idle' | 'recording' | 'paused' | 'stopped';
+type RecordingState = 'idle' | 'recording' | 'stopped';
 
 interface RecordingController {
   state: RecordingState;
@@ -28,7 +27,7 @@ class VoiceRecorderController {
     audioUrl: null,
   };
 
-  private listeners: Set<(controller: RecordingController) => void> = new Set();
+  private listeners = new Set<(controller: RecordingController) => void>();
 
   subscribe(listener: (controller: RecordingController) => void) {
     this.listeners.add(listener);
@@ -36,11 +35,26 @@ class VoiceRecorderController {
   }
 
   private notify() {
-    this.listeners.forEach(listener => listener({ ...this.controller }));
+    this.listeners.forEach((listener) => listener({ ...this.controller }));
   }
 
   getState(): RecordingController {
     return { ...this.controller };
+  }
+
+  private resolveMimeType(): string {
+    const preferred = [
+      'audio/ogg;codecs=opus',
+      'audio/ogg',
+      'audio/mpeg',
+      'audio/mp4',
+    ];
+
+    for (const type of preferred) {
+      if (MediaRecorder.isTypeSupported(type)) return type;
+    }
+
+    return '';
   }
 
   async start(): Promise<{ success: boolean; error?: string }> {
@@ -50,33 +64,7 @@ class VoiceRecorderController {
 
     try {
       this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      // Determine best supported mime type
-      let mimeType = 'audio/ogg;codecs=opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        if (MediaRecorder.isTypeSupported('audio/mp4')) {
-          mimeType = 'audio/mp4';
-        } else if (MediaRecorder.isTypeSupported('audio/mpeg')) {
-          mimeType = 'audio/mpeg';
-        } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-          mimeType = 'audio/webm;codecs=opus';
-        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
-          mimeType = 'audio/webm';
-      // Prefer OGG/OPUS for WhatsApp compatibility, fallback gracefully
-      let mimeType = 'audio/ogg;codecs=opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
-          mimeType = 'audio/webm;codecs=opus';
-        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
-          mimeType = 'audio/webm';
-        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
-          mimeType = 'audio/mp4';
-        } else if (MediaRecorder.isTypeSupported('audio/mpeg')) {
-          mimeType = 'audio/mpeg';
-        } else {
-          mimeType = '';
-        }
-      }
+      const mimeType = this.resolveMimeType();
 
       this.mediaRecorder = mimeType
         ? new MediaRecorder(this.mediaStream, { mimeType })
@@ -85,14 +73,13 @@ class VoiceRecorderController {
       this.chunks = [];
 
       this.mediaRecorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          this.chunks.push(e.data);
-        }
+        if (e.data.size > 0) this.chunks.push(e.data);
       };
 
       this.mediaRecorder.onstop = () => {
-        const usedMimeType = this.mediaRecorder?.mimeType || mimeType || 'audio/ogg';
-        const blob = new Blob(this.chunks, { type: usedMimeType });
+        const recorderMime = this.mediaRecorder?.mimeType || mimeType || 'audio/ogg';
+        const normalizedMime = recorderMime.includes('webm') ? 'audio/ogg' : recorderMime;
+        const blob = new Blob(this.chunks, { type: normalizedMime });
         const url = URL.createObjectURL(blob);
 
         this.controller.audioBlob = blob;
@@ -100,49 +87,39 @@ class VoiceRecorderController {
         this.controller.state = 'stopped';
 
         this.notify();
-        this.cleanup();
+        this.cleanupMedia();
       };
 
-      this.mediaRecorder.onerror = (e: Event) => {
-        console.error('MediaRecorder error:', e);
-        this.reset();
-      };
-
-      this.mediaRecorder.start(100);
+      this.mediaRecorder.start(200);
       this.startTimeMs = Date.now();
       this.controller.state = 'recording';
       this.controller.startTime = this.startTimeMs;
       this.controller.duration = 0;
 
       this.timerInterval = setInterval(() => {
-        if (this.startTimeMs) {
-          this.controller.duration = Math.floor((Date.now() - this.startTimeMs) / 1000);
-          this.notify();
-        }
+        if (!this.startTimeMs) return;
+        this.controller.duration = Math.floor((Date.now() - this.startTimeMs) / 1000);
+        this.notify();
       }, 1000);
 
       this.notify();
       return { success: true };
     } catch (error: unknown) {
-      console.error('Failed to start recording:', error);
-      this.cleanup();
+      this.reset();
       const err = error as { name?: string };
       return {
         success: false,
-        error: err.name === 'NotAllowedError'
-          ? 'Microphone access denied. Please allow microphone permission in your browser settings.'
-          : 'Failed to access microphone. Please check your device settings.',
+        error:
+          err.name === 'NotAllowedError'
+            ? 'Microphone access denied. Please allow microphone permission in your browser settings.'
+            : 'Failed to access microphone. Please check your device settings.',
       };
     }
   }
 
   stop() {
     if (this.controller.state !== 'recording') return;
-
-    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-      this.mediaRecorder.stop();
-    }
-
+    if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') this.mediaRecorder.stop();
     if (this.timerInterval) {
       clearInterval(this.timerInterval);
       this.timerInterval = null;
@@ -158,11 +135,9 @@ class VoiceRecorderController {
       this.mediaRecorder.stop();
     }
 
-    this.cleanup();
+    this.cleanupMedia();
 
-    if (this.controller.audioUrl) {
-      URL.revokeObjectURL(this.controller.audioUrl);
-    }
+    if (this.controller.audioUrl) URL.revokeObjectURL(this.controller.audioUrl);
 
     this.controller = {
       state: 'idle',
@@ -175,14 +150,14 @@ class VoiceRecorderController {
     this.notify();
   }
 
-  private cleanup() {
+  private cleanupMedia() {
     if (this.timerInterval) {
       clearInterval(this.timerInterval);
       this.timerInterval = null;
     }
 
     if (this.mediaStream) {
-      this.mediaStream.getTracks().forEach(track => track.stop());
+      this.mediaStream.getTracks().forEach((track) => track.stop());
       this.mediaStream = null;
     }
 
