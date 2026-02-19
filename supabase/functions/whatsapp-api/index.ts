@@ -64,7 +64,7 @@ serve(async (req) => {
       }
 
       case 'send_message': {
-        const { token, phoneNumberId, to, type, content, templateName, templateParams } = params;
+        const { token, phoneNumberId, to, type, content, templateName, templateParams, mediaFileName, mediaMimeType } = params;
         let messageBody: any = { messaging_product: 'whatsapp', to };
 
         if (type === 'template' && templateName) {
@@ -81,7 +81,46 @@ serve(async (req) => {
           messageBody.document = { link: content };
         } else if (type === 'audio') {
           messageBody.type = 'audio';
-          messageBody.audio = { link: content };
+
+          try {
+            // Prefer WhatsApp-hosted media for audio reliability (OGG/OPUS etc).
+            const mediaResponse = await fetch(content);
+            if (!mediaResponse.ok) throw new Error('Failed to fetch audio URL');
+
+            const mediaBlob = await mediaResponse.blob();
+            const uploadForm = new FormData();
+            uploadForm.append('messaging_product', 'whatsapp');
+
+            const resolvedMime = (mediaMimeType || mediaBlob.type || 'audio/ogg').toLowerCase();
+            const normalizedMime = resolvedMime.includes('ogg')
+              ? 'audio/ogg'
+              : resolvedMime.includes('mpeg')
+                ? 'audio/mpeg'
+                : resolvedMime.includes('mp4')
+                  ? 'audio/mp4'
+                  : resolvedMime.includes('amr')
+                    ? 'audio/amr'
+                    : resolvedMime;
+
+            uploadForm.append('type', normalizedMime);
+            uploadForm.append('file', mediaBlob, mediaFileName || 'voice.ogg');
+
+            const uploadRes = await fetch(`${WHATSAPP_API_URL}/${phoneNumberId}/media`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` },
+              body: uploadForm,
+            });
+
+            const uploadData = await uploadRes.json();
+            if (!uploadRes.ok || !uploadData?.id) {
+              throw new Error(uploadData?.error?.message || 'Failed to upload audio media');
+            }
+
+            messageBody.audio = { id: uploadData.id };
+          } catch (_error) {
+            // Fallback to link flow if media upload fails.
+            messageBody.audio = { link: content };
+          }
         } else {
           messageBody.type = 'text';
           messageBody.text = { body: content };

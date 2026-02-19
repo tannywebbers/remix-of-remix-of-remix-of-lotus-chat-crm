@@ -49,7 +49,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             onClick={() => setMediaPreview(true)}
           />
           {content && content !== '[Image]' && (
-            <p className="text-[15px] sm:text-[14px] leading-[1.3] whitespace-pre-wrap break-words">{content}</p>
+            <p className="text-[15px] sm:text-[14px] leading-[1.3] whitespace-pre-wrap break-words font-medium">{content}</p>
           )}
         </div>
       );
@@ -132,7 +132,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     }
 
     return (
-      <p className="text-[15px] sm:text-[14px] leading-[1.3] whitespace-pre-wrap break-words">{content}</p>
+      <p className="text-[15px] sm:text-[14px] leading-[1.3] whitespace-pre-wrap break-words font-medium">{content}</p>
     );
   };
 

@@ -34,7 +34,7 @@ export function DesktopLayout() {
         {/* Hamburger */}
         <div className="flex items-center justify-center py-4">
           <Button variant="ghost" size="icon" onClick={() => setSidebarOpen(!sidebarOpen)} className="h-10 w-10">
-            <Menu className="h-5 w-5 text-muted-foreground" />
+            <Menu className="h-5 w-5 text-black" />
           </Button>
         </div>
 
@@ -48,7 +48,7 @@ export function DesktopLayout() {
                 'relative flex flex-col items-center gap-0.5 w-14 py-2 rounded-xl transition-all',
                 viewMode === mode
                   ? 'bg-primary/10 text-primary'
-                  : 'text-muted-foreground hover:bg-accent'
+                  : 'text-black hover:bg-accent'
               )}
               title={label}
             >
@@ -58,7 +58,7 @@ export function DesktopLayout() {
                   viewMode === mode ? "opacity-100" : "opacity-60"
                 )} />
               ) : (
-                <Icon className={cn("h-6 w-6", viewMode === mode && "stroke-[2.5px]")} />
+                <Icon className={cn("h-6 w-6 stroke-[2.6px]", viewMode === mode && "stroke-[2.8px]")} />
               )}
               <span className="text-[10px] font-semibold">{label}</span>
               {mode === 'chats' && totalUnread > 0 && (
@@ -74,7 +74,7 @@ export function DesktopLayout() {
         <div className="flex flex-col items-center gap-2 py-4">
           <Button
             variant="ghost" size="icon"
-            className="h-10 w-10 text-muted-foreground hover:text-primary"
+            className="h-10 w-10 text-black hover:text-primary"
             onClick={() => setShowNewChatModal(true)}
             title="New Chat"
           >
@@ -82,7 +82,7 @@ export function DesktopLayout() {
           </Button>
           <Button
             variant="ghost" size="icon"
-            className="h-10 w-10 text-muted-foreground hover:text-primary"
+            className="h-10 w-10 text-black hover:text-primary"
             onClick={() => setShowAddContactModal(true)}
             title="Add Contact"
           >
@@ -97,7 +97,7 @@ export function DesktopLayout() {
           onClick={() => setSidebarOpen(true)}
           className="absolute top-3 left-3 z-50 h-9 w-9 flex items-center justify-center rounded-lg bg-panel-header border border-panel-border hover:bg-accent transition-colors"
         >
-          <Menu className="h-5 w-5 text-muted-foreground" />
+          <Menu className="h-5 w-5 text-black" />
         </button>
       )}
 
