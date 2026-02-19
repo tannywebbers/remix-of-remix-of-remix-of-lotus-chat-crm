@@ -11,6 +11,13 @@ window.addEventListener('storage', (event) => {
   if (event.key?.startsWith('admin_')) applyAdminAppearance();
 });
 
+
+applyAdminAppearance();
+window.addEventListener('storage', (event) => {
+  if (event.key?.startsWith('admin_')) applyAdminAppearance();
+});
+
+// Register service worker — NO prompt, just silently update
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
@@ -21,6 +28,9 @@ if ('serviceWorker' in navigator) {
         const waiting = registration.waiting;
         if (!waiting) return;
         waiting.postMessage({ type: 'SKIP_WAITING' });
+      // Auto-apply any waiting update without prompting user
+      const applyUpdate = (sw: ServiceWorker) => {
+        sw.postMessage({ type: 'SKIP_WAITING' });
       };
 
       registration.addEventListener('updatefound', () => {
@@ -39,6 +49,24 @@ if ('serviceWorker' in navigator) {
         registration.update();
       }, 5 * 60 * 1000);
 
+            applyUpdate(installing);
+          }
+        });
+      });
+
+      if (registration.waiting) {
+        applyUpdate(registration.waiting);
+      }
+
+      // Clean up old caches
+      const cacheKeys = await caches.keys();
+      await Promise.all(
+        cacheKeys
+          .filter((key) => key.startsWith('lotus-'))
+          .map((key) => caches.delete(key)),
+      );
+
+      // Controller change = reload once
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;
@@ -52,12 +80,15 @@ if ('serviceWorker' in navigator) {
           .filter((key) => key.startsWith('lotus-') && !key.startsWith(SW_CACHE_PREFIX))
           .map((key) => caches.delete(key)),
       );
+      // Check for updates periodically
+      setInterval(() => { registration.update(); }, 5 * 60 * 1000);
     } catch (error) {
       console.error('❌ Service Worker registration failed:', error);
     }
   });
 }
 
+// Play notification sound when SW sends PLAY_SOUND message
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.addEventListener('message', (event) => {
     if (event.data?.type === 'PLAY_SOUND') {
@@ -72,6 +103,10 @@ let deferredPrompt: any;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   deferredPrompt = e;
+let deferredPrompt: Event & { prompt?: () => void } | null = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e as Event & { prompt?: () => void };
 });
 window.addEventListener('appinstalled', () => {
   deferredPrompt = null;

@@ -9,8 +9,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 
 interface AccountDetail {
@@ -21,14 +19,12 @@ interface AccountDetail {
 
 function autoFormatPhone(phone: string): string {
   const cleaned = phone.replace(/\s+/g, '');
-  // Nigerian number without country code
-  if (/^0[789]\d{9}$/.test(cleaned)) {
-    return '+234' + cleaned.substring(1);
-  }
-  // Already has + prefix
+  if (/^0[789]\d{9}$/.test(cleaned)) return '+234' + cleaned.substring(1);
   if (cleaned.startsWith('+')) return cleaned;
   return cleaned;
 }
+
+const APP_TYPE_OPTIONS = ['tloan', 'quickash', 'others'];
 
 export function AddContactModal() {
   const { showAddContactModal, setShowAddContactModal, addContact, addContacts } = useAppStore();
@@ -42,11 +38,11 @@ export function AddContactModal() {
     phone: '',
     amount: '',
     appType: 'tloan',
+    appTypeCustom: '',
     dayType: '0',
   });
   const [accountDetails, setAccountDetails] = useState<AccountDetail[]>([]);
   
-  // Bulk form
   const [bulkForm, setBulkForm] = useState({
     contactIds: '',
     customerNames: '',
@@ -56,7 +52,7 @@ export function AddContactModal() {
   });
 
   const resetForms = () => {
-    setSingleForm({ loanId: '', name: '', phone: '', amount: '', appType: 'tloan', dayType: '0' });
+    setSingleForm({ loanId: '', name: '', phone: '', amount: '', appType: 'tloan', appTypeCustom: '', dayType: '0' });
     setAccountDetails([]);
     setBulkForm({ contactIds: '', customerNames: '', phoneNumbers: '', appType: 'tloan', dayType: '0' });
   };
@@ -80,13 +76,13 @@ export function AddContactModal() {
 
   const handleSingleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
     if (!singleForm.loanId || !singleForm.name || !singleForm.phone) {
       toast({ title: 'Missing required fields', description: 'Please fill in Loan ID, Name, and Phone number.', variant: 'destructive' });
       return;
     }
     if (!user) return;
 
+    const resolvedAppType = singleForm.appType === 'others' ? (singleForm.appTypeCustom.trim() || 'others') : singleForm.appType;
     const formattedPhone = autoFormatPhone(singleForm.phone);
     setLoading(true);
     try {
@@ -98,7 +94,7 @@ export function AddContactModal() {
           name: singleForm.name,
           phone: formattedPhone,
           amount: singleForm.amount ? parseFloat(singleForm.amount) : null,
-          app_type: singleForm.appType,
+          app_type: resolvedAppType,
           day_type: parseInt(singleForm.dayType),
         })
         .select()
@@ -106,7 +102,6 @@ export function AddContactModal() {
 
       if (contactError) throw contactError;
 
-      // Insert account details directly
       const validAccounts = accountDetails.filter(ad => ad.bank.trim() && ad.accountNumber.trim());
       if (validAccounts.length > 0) {
         const { error: accountError } = await supabase
@@ -140,8 +135,8 @@ export function AddContactModal() {
 
       toast({ title: 'Contact added', description: `${contactData.name} has been added successfully.` });
       handleClose();
-    } catch (error: any) {
-      toast({ title: 'Error adding contact', description: error.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Error adding contact', description: (error as Error).message, variant: 'destructive' });
     } finally {
       setLoading(false);
     }
@@ -184,8 +179,8 @@ export function AddContactModal() {
       addContacts(newContacts);
       toast({ title: 'Contacts added', description: `${newContacts.length} contacts added.` });
       handleClose();
-    } catch (error: any) {
-      toast({ title: 'Error adding contacts', description: error.message, variant: 'destructive' });
+    } catch (error: unknown) {
+      toast({ title: 'Error adding contacts', description: (error as Error).message, variant: 'destructive' });
     } finally { setLoading(false); }
   };
 
@@ -239,30 +234,36 @@ export function AddContactModal() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5"><Smartphone className="h-3.5 w-3.5" /> App Type</Label>
-                  <RadioGroup value={singleForm.appType} onValueChange={(v) => setSingleForm({ ...singleForm, appType: v })} className="flex gap-6">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="tloan" id="single-tloan" />
-                      <Label htmlFor="single-tloan" className="font-normal cursor-pointer">Tloan</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="quickash" id="single-quickash" />
-                      <Label htmlFor="single-quickash" className="font-normal cursor-pointer">Quickash</Label>
-                    </div>
-                  </RadioGroup>
+                  <select
+                    value={singleForm.appType}
+                    onChange={(e) => setSingleForm({ ...singleForm, appType: e.target.value })}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="tloan">Tloan</option>
+                    <option value="quickash">Quickash</option>
+                    <option value="others">Others</option>
+                  </select>
+                  {singleForm.appType === 'others' && (
+                    <Input
+                      placeholder="Enter app name"
+                      value={singleForm.appTypeCustom}
+                      onChange={(e) => setSingleForm({ ...singleForm, appTypeCustom: e.target.value })}
+                    />
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> Day Type</Label>
-                  <Select value={singleForm.dayType} onValueChange={(v) => setSingleForm({ ...singleForm, dayType: v })}>
-                    <SelectTrigger className="w-full bg-background"><SelectValue /></SelectTrigger>
-                    <SelectContent className="bg-background border border-border">
-                      <SelectItem value="-1">-1 Day</SelectItem>
-                      <SelectItem value="0">0 Day</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    type="number"
+                    value={singleForm.dayType}
+                    onChange={(e) => setSingleForm({ ...singleForm, dayType: e.target.value })}
+                    placeholder="0"
+                  />
+                  <p className="text-[11px] text-muted-foreground">Can be negative (e.g. -1, -7)</p>
                 </div>
               </div>
 
-              {/* Account Details — same layout as Edit Contact */}
+              {/* Account Details */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label>Account Details</Label>
@@ -313,26 +314,24 @@ export function AddContactModal() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5"><Smartphone className="h-3.5 w-3.5" /> App Type (all)</Label>
-                  <RadioGroup value={bulkForm.appType} onValueChange={(v) => setBulkForm({ ...bulkForm, appType: v })} className="flex gap-6">
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="tloan" id="bulk-tloan" />
-                      <Label htmlFor="bulk-tloan" className="font-normal cursor-pointer">Tloan</Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="quickash" id="bulk-quickash" />
-                      <Label htmlFor="bulk-quickash" className="font-normal cursor-pointer">Quickash</Label>
-                    </div>
-                  </RadioGroup>
+                  <select
+                    value={bulkForm.appType}
+                    onChange={(e) => setBulkForm({ ...bulkForm, appType: e.target.value })}
+                    className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="tloan">Tloan</option>
+                    <option value="quickash">Quickash</option>
+                    <option value="others">Others</option>
+                  </select>
                 </div>
                 <div className="space-y-2">
                   <Label className="flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5" /> Day Type (all)</Label>
-                  <Select value={bulkForm.dayType} onValueChange={(v) => setBulkForm({ ...bulkForm, dayType: v })}>
-                    <SelectTrigger className="w-full bg-background"><SelectValue /></SelectTrigger>
-                    <SelectContent className="bg-background border border-border">
-                      <SelectItem value="-1">-1 Day</SelectItem>
-                      <SelectItem value="0">0 Day</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <Input
+                    type="number"
+                    value={bulkForm.dayType}
+                    onChange={(e) => setBulkForm({ ...bulkForm, dayType: e.target.value })}
+                    placeholder="0"
+                  />
                 </div>
               </div>
 

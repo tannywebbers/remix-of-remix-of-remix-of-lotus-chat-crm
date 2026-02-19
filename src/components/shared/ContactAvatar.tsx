@@ -1,7 +1,7 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getInitials } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
 import { isContactOnline } from '@/lib/utils/presence';
+import { User } from 'lucide-react';
 
 interface ContactAvatarProps {
   name: string;
@@ -13,9 +13,15 @@ interface ContactAvatarProps {
 }
 
 const sizeClasses = {
-  sm: 'h-10 w-10 text-sm',
-  md: 'h-12 w-12 text-base',
-  lg: 'h-16 w-16 text-lg',
+  sm: 'h-10 w-10',
+  md: 'h-12 w-12',
+  lg: 'h-16 w-16',
+};
+
+const iconSizeClasses = {
+  sm: 'h-5 w-5',
+  md: 'h-6 w-6',
+  lg: 'h-8 w-8',
 };
 
 const statusSizeClasses = {
@@ -25,15 +31,15 @@ const statusSizeClasses = {
 };
 
 export function ContactAvatar({ name, avatar, isOnline, lastSeen, size = 'md', className }: ContactAvatarProps) {
-  // Compute real presence from lastSeen threshold
   const realOnline = isContactOnline(lastSeen, isOnline);
 
   return (
-    <div className="relative">
-      <Avatar className={cn(sizeClasses[size], 'bg-primary/10', className)}>
+    <div className="relative shrink-0">
+      <Avatar className={cn(sizeClasses[size], 'bg-muted', className)}>
         <AvatarImage src={avatar} alt={name} />
-        <AvatarFallback className="bg-primary/10 text-primary font-medium">
-          {getInitials(name)}
+        <AvatarFallback className="bg-muted text-muted-foreground">
+          {/* Default profile icon instead of initials */}
+          <User className={cn(iconSizeClasses[size], 'stroke-[1.5px]')} />
         </AvatarFallback>
       </Avatar>
       {(isOnline !== undefined || lastSeen !== undefined) && (
@@ -41,7 +47,7 @@ export function ContactAvatar({ name, avatar, isOnline, lastSeen, size = 'md', c
           className={cn(
             'absolute rounded-full border-2 border-background',
             statusSizeClasses[size],
-            realOnline ? 'bg-status-online' : 'bg-status-offline'
+            realOnline ? 'bg-[hsl(var(--status-online))]' : 'bg-[hsl(var(--status-offline))]'
           )}
         />
       )}

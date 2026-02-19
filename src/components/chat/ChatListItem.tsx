@@ -41,6 +41,7 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
   const isFav = favorites[chat.id];
   const { user } = useAuth();
   const [allLabels, setAllLabels] = useState<Label[]>(providedLabels);
+  const [allLabels, setAllLabels] = useState<Label[]>(chatLabels);
   const [assignedLabelIds, setAssignedLabelIds] = useState<string[]>(chatLabels.map(l => l.id));
 
   // Touch intent system — prevent accidental click during scroll
@@ -131,6 +132,19 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
       .eq('chat_id', chat.id);
 
     setAssignedLabelIds((((assignedRes as any[]) || []).map((x: any) => x.label_id)));
+    setAllLabels(chatLabels);
+    setAssignedLabelIds(chatLabels.map(l => l.id));
+  }, [chatLabels]);
+
+  const loadLabelsForMenu = async () => {
+    if (!user) return;
+    const [labelsRes, assignedRes] = await Promise.all([
+      supabase.from('labels' as any).select('*').eq('user_id', user.id).order('name', { ascending: true }),
+      supabase.from('chat_labels' as any).select('label_id').eq('user_id', user.id).eq('chat_id', chat.id),
+    ]);
+
+    setAllLabels(((labelsRes.data as any[]) || []) as Label[]);
+    setAssignedLabelIds((((assignedRes.data as any[]) || []).map((x: any) => x.label_id)));
   };
 
   const toggleLabelAssignment = async (labelId: string, checked: boolean) => {
