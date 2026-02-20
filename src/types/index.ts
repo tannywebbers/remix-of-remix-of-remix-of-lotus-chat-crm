@@ -28,7 +28,7 @@ export interface Message {
   id: string;
   contactId: string;
   content: string;
-  type: 'text' | 'image' | 'document' | 'audio' | 'video';
+  type: 'text' | 'image' | 'document' | 'audio' | 'video' | 'template';
   status: 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
   isOutgoing: boolean;
   timestamp: Date;
