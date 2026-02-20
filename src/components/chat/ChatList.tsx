@@ -57,7 +57,6 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const [contactDayTypeFilter, setContactDayTypeFilter] = useState('all');
 
   const [labels, setLabels] = useState<Label[]>([]);
-  const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
   const [chatLabelMap, setChatLabelMap] = useState<Record<string, string[]>>({});
   const [showLabelManager, setShowLabelManager] = useState(false);
 
@@ -112,6 +111,8 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
     return () => { supabase.removeChannel(channel); };
   }, [user, fetchLabels]);
+
+  const archivedCount = chats.filter((c) => c.isArchived || c.contact.isArchived).length;
 
   const filteredChats = chats
     .filter((chat) => {

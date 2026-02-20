@@ -113,8 +113,8 @@ export function MobileLayout() {
             key={mode}
             onClick={() => setViewMode(mode)}
             className={cn(
-              'relative flex flex-col items-center gap-0.5 px-6 py-2 min-w-[72px] transition-colors',
-              'text-black'
+              'relative flex flex-col items-center gap-0.5 px-6 py-2 min-w-[72px] rounded-xl transition-all',
+              viewMode === mode ? 'text-black bg-primary/20 ring-1 ring-primary/40' : 'text-black hover:bg-accent/60'
             )}
           >
             {imgSrc ? (

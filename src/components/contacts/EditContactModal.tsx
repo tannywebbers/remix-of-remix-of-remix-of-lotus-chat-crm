@@ -50,13 +50,17 @@ export function EditContactModal({ open, onOpenChange, contactId }: EditContactM
   useEffect(() => {
     if (contact && open && !initializedRef.current) {
       initializedRef.current = true;
+      const knownAppTypes = ['tloan', 'quickash', 'others'];
+      const currentAppType = (contact.appType || 'tloan').toLowerCase();
+      const appTypeIsKnown = knownAppTypes.includes(currentAppType);
+
       setFormData({
         loanId: contact.loanId || '',
         name: contact.name || '',
         phone: contact.phone || '',
         amount: contact.amount?.toString() || '',
-        appType: contact.appType || 'tloan',
-        appTypeCustom: '',
+        appType: appTypeIsKnown ? currentAppType : 'others',
+        appTypeCustom: appTypeIsKnown ? '' : (contact.appType || ''),
         dayType: contact.dayType?.toString() || '0',
       });
       setAccountDetails(contact.accountDetails?.map(ad => ({

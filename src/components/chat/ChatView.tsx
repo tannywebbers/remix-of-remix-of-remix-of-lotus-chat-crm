@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { ContactAvatar } from '@/components/shared/ContactAvatar';
 import { MessageBubble } from '@/components/chat/MessageBubble';
+import { ChatOptionsMenu } from '@/components/chat/ChatOptionsMenu';
 import { FileUploadButton } from '@/components/chat/FileUploadButton';
 import { UnifiedTemplateSelector } from '@/components/chat/UnifiedTemplateSelector';
 import { VoiceRecorderButton } from '@/components/chat/VoiceRecorderButton';
@@ -88,6 +89,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         user_id: user.id, contact_id: activeChat.id, content, type: 'text', is_outgoing: true,
         status: whatsappMessageId ? 'sent' : 'failed', whatsapp_message_id: whatsappMessageId || null,
       }).select().single();
+
       if (error) throw error;
 
       addMessage(activeChat.id, {

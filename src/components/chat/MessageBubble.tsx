@@ -1,16 +1,18 @@
-import { useState, useRef } from 'react';
+import { useRef, useState } from 'react';
+import { AlertCircle, FileText, MoreVertical, Pause, Play, Trash2 } from 'lucide-react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Message } from '@/types';
 import { MessageStatus } from '@/components/shared/MessageStatus';
 import { MediaPreviewModal } from '@/components/chat/MediaPreviewModal';
 import { formatMessageTime } from '@/lib/utils/format';
 import { cn } from '@/lib/utils';
-import { FileText, Play, Pause, AlertCircle } from 'lucide-react';
 
 interface MessageBubbleProps {
   message: Message;
+  onDelete?: () => void;
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({ message, onDelete }: MessageBubbleProps) {
   const { content, isOutgoing, timestamp, status, type, mediaUrl } = message;
   const [mediaPreview, setMediaPreview] = useState(false);
   const [audioPlaying, setAudioPlaying] = useState(false);
@@ -29,28 +31,14 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
   const renderContent = () => {
     if (isSticker && mediaUrl) {
-      return (
-        <img
-          src={mediaUrl}
-          alt="Sticker"
-          className="max-w-[140px] max-h-[140px] object-contain cursor-pointer"
-          onClick={() => setMediaPreview(true)}
-        />
-      );
+      return <img src={mediaUrl} alt="Sticker" className="max-w-[140px] max-h-[140px] object-contain cursor-pointer" onClick={() => setMediaPreview(true)} />;
     }
 
     if (type === 'image' && mediaUrl) {
       return (
         <div className="space-y-0.5">
-          <img
-            src={mediaUrl}
-            alt="Image"
-            className="rounded-lg max-w-[260px] sm:max-w-[320px] max-h-[280px] object-cover cursor-pointer hover:opacity-90 transition-opacity"
-            onClick={() => setMediaPreview(true)}
-          />
-          {content && content !== '[Image]' && (
-            <p className="text-[15px] sm:text-[14px] leading-[1.3] whitespace-pre-wrap break-words font-medium">{content}</p>
-          )}
+          <img src={mediaUrl} alt="Image" className="rounded-lg max-w-[260px] sm:max-w-[320px] max-h-[280px] object-cover cursor-pointer hover:opacity-90 transition-opacity" onClick={() => setMediaPreview(true)} />
+          {content && content !== '[Image]' && <p className="text-[15px] sm:text-[14px] leading-[1.3] whitespace-pre-wrap break-words font-medium">{content}</p>}
         </div>
       );
     }
@@ -58,18 +46,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     if (type === 'audio' && mediaUrl) {
       return (
         <div className="flex items-center gap-2.5 min-w-[180px]">
-          <button
-            className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0 hover:bg-primary/30 transition-colors"
-            onClick={toggleAudio}
-          >
-            {audioPlaying
-              ? <Pause className="h-4 w-4 text-primary" />
-              : <Play className="h-4 w-4 text-primary ml-0.5" />
-            }
+          <button className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center shrink-0 hover:bg-primary/30 transition-colors" onClick={toggleAudio}>
+            {audioPlaying ? <Pause className="h-4 w-4 text-primary" /> : <Play className="h-4 w-4 text-primary ml-0.5" />}
           </button>
           <div className="flex-1 min-w-[80px]">
             <input
-              type="range" min={0} max={100} value={audioProgress}
+              type="range"
+              min={0}
+              max={100}
+              value={audioProgress}
               onChange={(e) => {
                 if (audioRef.current && audioRef.current.duration) {
                   const pct = Number(e.target.value);
@@ -80,7 +65,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               className="w-full h-1 accent-primary cursor-pointer"
             />
             <audio
-              ref={audioRef} src={mediaUrl} preload="metadata"
+              ref={audioRef}
+              src={mediaUrl}
+              preload="metadata"
               onLoadedMetadata={() => {
                 if (audioRef.current && isFinite(audioRef.current.duration)) {
                   const secs = Math.floor(audioRef.current.duration);
@@ -103,26 +90,10 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       );
     }
 
-    if (type === 'video' && mediaUrl) {
-      return (
-        <div className="relative max-w-[260px] sm:max-w-[320px] cursor-pointer" onClick={() => setMediaPreview(true)}>
-          <video src={mediaUrl} className="rounded-lg w-full" />
-          <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-lg">
-            <Play className="h-10 w-10 text-white" />
-          </div>
-        </div>
-      );
-    }
-
     if (type === 'document' && mediaUrl) {
       return (
-        <button
-          onClick={() => setMediaPreview(true)}
-          className="flex items-center gap-2.5 p-2.5 bg-background/50 rounded-lg hover:bg-background/70 transition-colors w-full text-left"
-        >
-          <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
-            <FileText className="h-4 w-4 text-primary" />
-          </div>
+        <button onClick={() => setMediaPreview(true)} className="flex items-center gap-2.5 p-2.5 bg-background/50 rounded-lg hover:bg-background/70 transition-colors w-full text-left">
+          <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"><FileText className="h-4 w-4 text-primary" /></div>
           <div className="flex-1 min-w-0">
             <p className="text-[13px] font-medium truncate">{content || 'Document'}</p>
             <p className="text-[11px] text-muted-foreground">Tap to view</p>
@@ -131,45 +102,49 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       );
     }
 
-    return (
-      <p className="text-[15px] sm:text-[14px] leading-[1.3] whitespace-pre-wrap break-words font-medium">{content}</p>
-    );
+    return <p className="text-[15px] sm:text-[14px] leading-[1.3] whitespace-pre-wrap break-words font-medium">{content}</p>;
   };
 
   return (
     <>
       <div className={cn('flex animate-message-in', isOutgoing ? 'justify-end' : 'justify-start')}>
-        <div className={cn(
-          isSticker ? 'message-sticker' : 'message-bubble',
-          !isSticker && (isOutgoing ? 'message-bubble-outgoing' : 'message-bubble-incoming')
-        )}>
-          {renderContent()}
-
-          {!isSticker && (
-            <div className={cn('flex items-center gap-1 mt-0.5', isOutgoing ? 'justify-end' : 'justify-start')}>
-              <span className="text-[11px] text-muted-foreground">{formatMessageTime(timestamp)}</span>
-              {isOutgoing && <MessageStatus status={status} className="h-3.5 w-3.5" />}
+        <div className="relative group">
+          {onDelete && (
+            <div className={cn('absolute top-1 z-10', isOutgoing ? 'left-1' : 'right-1')}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="h-5 w-5 rounded-full bg-black/10 text-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <MoreVertical className="h-3 w-3" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align={isOutgoing ? 'start' : 'end'}>
+                  <DropdownMenuItem onClick={onDelete} className="text-destructive focus:text-destructive">
+                    <Trash2 className="h-4 w-4 mr-2" />Delete message
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           )}
 
-          {status === 'failed' && isOutgoing && (
-            <div className="flex items-center gap-1 mt-1 text-destructive">
-              <AlertCircle className="h-3 w-3" />
-              <span className="text-[11px]">Not sent</span>
-            </div>
-          )}
+          <div className={cn(isSticker ? 'message-sticker' : 'message-bubble', !isSticker && (isOutgoing ? 'message-bubble-outgoing' : 'message-bubble-incoming'))}>
+            {renderContent()}
+            {!isSticker && (
+              <div className={cn('flex items-center gap-1 mt-0.5', isOutgoing ? 'justify-end' : 'justify-start')}>
+                <span className="text-[11px] text-muted-foreground">{formatMessageTime(timestamp)}</span>
+                {isOutgoing && <MessageStatus status={status} className="h-3.5 w-3.5" />}
+              </div>
+            )}
+            {status === 'failed' && isOutgoing && (
+              <div className="flex items-center gap-1 mt-1 text-destructive">
+                <AlertCircle className="h-3 w-3" />
+                <span className="text-[11px]">Not sent</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {mediaUrl && (
-        <MediaPreviewModal
-          open={mediaPreview}
-          onOpenChange={setMediaPreview}
-          mediaUrl={mediaUrl}
-          mediaType={type as any}
-          fileName={content}
-        />
-      )}
+      {mediaUrl && <MediaPreviewModal open={mediaPreview} onOpenChange={setMediaPreview} mediaUrl={mediaUrl} mediaType={type as any} fileName={content} />}
     </>
   );
 }
