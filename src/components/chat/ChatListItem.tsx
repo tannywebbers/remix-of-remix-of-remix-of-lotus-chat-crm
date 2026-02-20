@@ -182,7 +182,7 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
           <ContactAvatar name={contact.name} avatar={contact.avatar} isOnline={contact.isOnline} size="md" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[18px] sm:text-[16px] font-medium truncate">{contact.name}</span>
+              <span className="text-[28px] sm:text-[17px] font-medium truncate">{contact.name}</span>
               {lastMessage && <span className="text-xs text-muted-foreground">{formatChatTime(lastMessage.timestamp)}</span>}
             </div>
             <div className="flex items-center justify-between mt-1 gap-2">

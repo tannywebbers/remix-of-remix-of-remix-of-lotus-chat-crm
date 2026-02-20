@@ -43,18 +43,8 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const {
-    viewMode,
-    setViewMode,
-    chats,
-    contacts,
-    activeChat,
-    setActiveChat,
-    searchQuery,
-    setSearchQuery,
-    setShowAddContactModal,
-    favorites,
-    deleteContact,
-    addMessage,
+    viewMode, setViewMode, chats, contacts, activeChat, setActiveChat, searchQuery, setSearchQuery,
+    setShowAddContactModal, favorites, deleteContact, addMessage,
   } = useAppStore();
 
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
@@ -131,6 +121,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       if (chatFilter === 'archived') return !!(chat.isArchived || chat.contact.isArchived);
       if (chat.isArchived || chat.contact.isArchived) return false;
       if (chatFilter === 'unread' && chat.unreadCount <= 0) return false;
+      if (selectedLabelId) return (chatLabelMap[chat.id] || []).includes(selectedLabelId);
       return true;
     })
     .sort((a, b) => {
@@ -168,9 +159,6 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
   const handleDeleteSelectedContacts = async () => {
     if (!user || selectedContactIds.length === 0) return;
-
-    if (!window.confirm(`Delete ${selectedContactIds.length} contact(s)?`)) return;
-
     const { error } = await supabase.from('contacts').delete().eq('user_id', user.id).in('id', selectedContactIds as any);
     if (error) {
       toast({ title: 'Failed to delete selected contacts', description: error.message, variant: 'destructive' });
@@ -208,13 +196,8 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
           });
 
           await supabase.from('messages').insert({
-            user_id: user.id,
-            contact_id: contact.id,
-            content,
-            type: 'text',
-            status: data?.success ? 'sent' : 'failed',
-            is_outgoing: true,
-            whatsapp_message_id: data?.messageId || null,
+            user_id: user.id, contact_id: contact.id, content, type: 'text',
+            status: data?.success ? 'sent' : 'failed', is_outgoing: true, whatsapp_message_id: data?.messageId || null,
           });
 
           if (data?.success) {
@@ -278,11 +261,17 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
       {viewMode === 'chats' && (
         <div className="px-4 pb-2 shrink-0 flex flex-wrap gap-2">
-          <Button size="sm" variant={chatFilter === 'all' ? 'default' : 'secondary'} className={cn('rounded-full font-semibold', chatFilter === 'all' && 'text-white')} onClick={() => setChatFilter('all')}>All</Button>
-          <Button size="sm" variant={chatFilter === 'unread' ? 'default' : 'secondary'} className={cn('rounded-full font-semibold', chatFilter === 'unread' && 'text-white')} onClick={() => setChatFilter('unread')}>Unread</Button>
-          <Button size="sm" variant={chatFilter === 'archived' ? 'default' : 'secondary'} className={cn('rounded-full font-semibold', chatFilter === 'archived' && 'text-white')} onClick={() => setChatFilter('archived')}><Archive className="h-3.5 w-3.5 mr-1" />Archived {archivedCount > 0 ? `(${archivedCount})` : ''}</Button>
+          <Button size="sm" variant={chatFilter === 'all' ? 'default' : 'secondary'} className={cn('rounded-full', chatFilter === 'all' && 'text-white')} onClick={() => setChatFilter('all')}>All</Button>
+          <Button size="sm" variant={chatFilter === 'unread' ? 'default' : 'secondary'} className={cn('rounded-full', chatFilter === 'unread' && 'text-white')} onClick={() => setChatFilter('unread')}>Unread</Button>
+          <Button size="sm" variant={chatFilter === 'archived' ? 'default' : 'secondary'} className={cn('rounded-full', chatFilter === 'archived' && 'text-white')} onClick={() => setChatFilter('archived')}><Archive className="h-3.5 w-3.5 mr-1" />Archived</Button>
+          {labels.map((label) => (
+            <Button key={label.id} size="sm" variant={selectedLabelId === label.id ? 'default' : 'secondary'} className="rounded-full" onClick={() => setSelectedLabelId((prev) => prev === label.id ? null : label.id)}>
+              <span className="h-2 w-2 rounded-full mr-1" style={{ backgroundColor: label.color }} />
+              {label.name}
+            </Button>
+          ))}
           <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button size="sm" variant="secondary" className="rounded-full font-semibold"><SortAsc className="h-3.5 w-3.5 mr-1" />Sort</Button></DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild><Button size="sm" variant="secondary" className="rounded-full"><SortAsc className="h-3.5 w-3.5 mr-1" />Sort</Button></DropdownMenuTrigger>
             <DropdownMenuContent>
               <DropdownMenuItem onClick={() => setSortBy('recent')}>Recent</DropdownMenuItem>
               <DropdownMenuItem onClick={() => setSortBy('name')}>Name</DropdownMenuItem>
@@ -296,31 +285,27 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
 
       {viewMode === 'contacts' && (
         <div className="px-4 pb-2 shrink-0 space-y-2">
-          {!contactSelectionMode && (
-            <div className="flex flex-wrap gap-2">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild><Button size="sm" variant="secondary" className="rounded-full"><SortAsc className="h-3.5 w-3.5 mr-1" />Sort</Button></DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem onClick={() => setContactSortBy('name')}>Name</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setContactSortBy('recent')}>Recent</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setContactSortBy('amount')}>Amount</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => setContactSortBy('loanId')}>Loan ID</DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setContactSortDir(contactSortDir === 'asc' ? 'desc' : 'asc')}>
-                    {contactSortDir === 'asc' ? <><SortDesc className="h-3.5 w-3.5 mr-1" />Descending</> : <><SortAsc className="h-3.5 w-3.5 mr-1" />Ascending</>}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+          <div className="flex flex-wrap gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild><Button size="sm" variant="secondary" className="rounded-full"><SortAsc className="h-3.5 w-3.5 mr-1" />Sort</Button></DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => setContactSortBy('name')}>Name</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setContactSortBy('recent')}>Recent</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setContactSortBy('amount')}>Amount</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setContactSortBy('loanId')}>Loan ID</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setContactSortDir(contactSortDir === 'asc' ? 'desc' : 'asc')}>{contactSortDir === 'asc' ? <><SortDesc className='h-3.5 w-3.5 mr-1' />Descending</> : <><SortAsc className='h-3.5 w-3.5 mr-1' />Ascending</>}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
-              <select value={contactDayTypeFilter} onChange={(e) => setContactDayTypeFilter(e.target.value)} className="h-8 rounded-full px-3 text-xs border bg-secondary">
-                {dayTypeOptions.map((v) => <option key={v} value={v}>{v === 'all' ? 'All day types' : `Day ${v}`}</option>)}
-              </select>
+            <select value={contactDayTypeFilter} onChange={(e) => setContactDayTypeFilter(e.target.value)} className="h-8 rounded-full px-3 text-xs border bg-secondary">
+              {dayTypeOptions.map((v) => <option key={v} value={v}>{v === 'all' ? 'All day types' : `Day ${v}`}</option>)}
+            </select>
 
-              <select value={contactAppTypeFilter} onChange={(e) => setContactAppTypeFilter(e.target.value)} className="h-8 rounded-full px-3 text-xs border bg-secondary">
-                {appTypeOptions.map((v) => <option key={v} value={v}>{v === 'all' ? 'All app types' : v.toUpperCase()}</option>)}
-              </select>
-            </div>
-          )}
+            <select value={contactAppTypeFilter} onChange={(e) => setContactAppTypeFilter(e.target.value)} className="h-8 rounded-full px-3 text-xs border bg-secondary">
+              {appTypeOptions.map((v) => <option key={v} value={v}>{v === 'all' ? 'All app types' : v.toUpperCase()}</option>)}
+            </select>
+          </div>
 
           {contactSelectionMode && (
             <div className="flex items-center gap-2">
@@ -364,7 +349,6 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
                 selectionMode={contactSelectionMode}
                 selected={selectedContactIds.includes(contact.id)}
                 onToggleSelect={toggleContactSelection}
-                onEnterSelectionMode={() => setContactSelectionMode(true)}
                 onClick={() => {
                   const chat = chats.find((c) => c.contact.id === contact.id);
                   if (chat) {
