@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useAppStore } from '@/store/appStore';
+import { useAuth } from '@/hooks/useAuth';
+import { updateContactsOnlineStatus } from '@/lib/utils/onlineStatusUtils';
 
 /**
  * Adaptive presence polling engine.
@@ -8,15 +10,25 @@ import { useAppStore } from '@/store/appStore';
  * - Reset on activity
  */
 export function usePresenceRefresh() {
+  const { user } = useAuth();
   const lastChangeRef = useRef<number>(Date.now());
   const intervalRef = useRef<number>(15000);
 
   useEffect(() => {
-    const tick = () => {
+    const tick = async () => {
+      if (user?.id) {
+        await updateContactsOnlineStatus(user.id);
+      }
+
       const contacts = useAppStore.getState().contacts;
       if (contacts.length > 0) {
-        // Force re-render to re-evaluate isContactOnline()
-        useAppStore.setState({ contacts: [...contacts] });
+        const now = Date.now();
+        const normalizedContacts = contacts.map((c) => {
+          const lastSeenMs = c.lastSeen ? new Date(c.lastSeen).getTime() : 0;
+          const shouldBeOnline = !!lastSeenMs && now - lastSeenMs < 70_000;
+          return c.isOnline === shouldBeOnline ? c : { ...c, isOnline: shouldBeOnline };
+        });
+        useAppStore.setState({ contacts: normalizedContacts });
       }
 
       // Smart backoff: if no status change detected for >10 min, slow down
@@ -27,6 +39,7 @@ export function usePresenceRefresh() {
     };
 
     const id = setInterval(tick, 15_000); // Base 15s polling
+    tick();
 
     // Listen for activity (any new message resets the backoff)
     const unsub = useAppStore.subscribe((state) => {
@@ -38,5 +51,5 @@ export function usePresenceRefresh() {
       clearInterval(id);
       unsub();
     };
-  }, []);
+  }, [user?.id]);
 }

@@ -250,7 +250,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
               <div><FileUploadButton onFileSelect={(file, type) => handleFileUpload(file, type)} uploading={uploading} /></div>
               <UnifiedTemplateSelector
                 contact={contact}
-                onSelectMetaTemplate={async (_template, _params) => {}}
+                onSelectMetaTemplate={handleSendMetaTemplate}
                 onInsertAppTemplate={(text) => {
                   setInputValue((prev) => prev + text);
                   setDraft(activeChat.id, inputValue + text);
