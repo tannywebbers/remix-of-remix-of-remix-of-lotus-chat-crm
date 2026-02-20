@@ -60,6 +60,7 @@ export function ContactListItem({ contact, onClick, selected, onToggleSelect, se
   const handleTouchEnd = () => {
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     if (!isLongPress && !isScrolling.current) {
+      // In selection mode, single click toggles selection
       if (selectionMode && onToggleSelect) {
         onToggleSelect(contact.id);
       } else {

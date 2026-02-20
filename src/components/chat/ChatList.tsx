@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Archive, CheckSquare, MessageCircle, Plus, Send, Settings2, SortAsc, SortDesc, SquarePen, Trash2, Users } from 'lucide-react';
+import { Archive, CheckSquare, MessageCircle, Plus, Search, Send, Settings2, SortAsc, SortDesc, SquarePen, Trash2, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SearchInput } from '@/components/shared/SearchInput';
+import { Input } from '@/components/ui/input';
 import { ChatListItem } from '@/components/chat/ChatListItem';
 import { ContactListItem } from '@/components/contacts/ContactListItem';
 import { LabelManagerPanel } from '@/components/chat/LabelManagerPanel';
@@ -12,6 +13,9 @@ import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
 
 type ChatFilter = 'all' | 'unread' | 'archived';
 type SortBy = 'recent' | 'name' | 'amount';
@@ -69,6 +73,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   const [metaTemplates, setMetaTemplates] = useState<MetaTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [sendingBulk, setSendingBulk] = useState(false);
+  const [selectedLabelId, setSelectedLabelId] = useState<string | null>(null);
 
   const listContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -242,13 +247,13 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
         <div className="flex items-center gap-1">
           {viewMode === 'chats' && (
             <>
-              <Button variant="ghost" size="icon" className="h-10 w-10 text-black" onClick={() => setShowLabelManager(true)}><Settings2 className="h-5 w-5 stroke-[2.8px]" /></Button>
-              <Button variant="ghost" size="icon" className="h-10 w-10 text-black" onClick={onNewChat}><SquarePen className="h-5 w-5 stroke-[2.8px]" /></Button>
+              <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setShowLabelManager(true)}><Settings2 className="h-5 w-5 stroke-[2.8px]" /></Button>
+              <Button variant="ghost" size="icon" className="h-10 w-10" onClick={onNewChat}><SquarePen className="h-5 w-5 stroke-[2.8px]" /></Button>
             </>
           )}
           {viewMode === 'contacts' && (
             <>
-              <Button variant="ghost" size="icon" className="h-10 w-10 text-black" onClick={() => setShowAddContactModal(true)}><Plus className="h-5 w-5 stroke-[2.8px]" /></Button>
+              <Button variant="ghost" size="icon" className="h-10 w-10" onClick={() => setShowAddContactModal(true)}><Plus className="h-5 w-5 stroke-[2.8px]" /></Button>
               <Button variant={contactSelectionMode ? 'default' : 'ghost'} size="icon" className="h-10 w-10" onClick={() => { setContactSelectionMode((v) => !v); setSelectedContactIds([]); }}><CheckSquare className="h-5 w-5" /></Button>
             </>
           )}
@@ -366,19 +371,60 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       <LabelManagerPanel open={showLabelManager} onOpenChange={setShowLabelManager} onLabelsChanged={fetchLabels} />
 
       <Dialog open={showBulkDialog} onOpenChange={setShowBulkDialog}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Bulk Message Selected Contacts</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <Button variant={bulkSource === 'app' ? 'default' : 'outline'} onClick={() => { setBulkSource('app'); setSelectedTemplateId(''); }}>App Template</Button>
-              <Button variant={bulkSource === 'meta' ? 'default' : 'outline'} onClick={() => { setBulkSource('meta'); setSelectedTemplateId(''); }}>Meta Template</Button>
-            </div>
-            <select value={selectedTemplateId} onChange={(e) => setSelectedTemplateId(e.target.value)} className="w-full h-10 border rounded-md px-3 bg-background">
-              <option value="">Select a template</option>
-              {(bulkSource === 'app' ? appTemplates : metaTemplates).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-            </select>
-            <Button className="w-full" onClick={handleBulkTemplateSend} disabled={sendingBulk || !selectedTemplateId || selectedContactIds.length === 0}>{sendingBulk ? 'Sending...' : `Send to ${selectedContactIds.length} contact(s)`}</Button>
-          </div>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden">
+          <DialogHeader><DialogTitle>Templates</DialogTitle></DialogHeader>
+          <Tabs value={bulkSource} onValueChange={(v) => { setBulkSource(v as 'app' | 'meta'); setSelectedTemplateId(''); }}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="meta">Meta Templates</TabsTrigger>
+              <TabsTrigger value="app">App Templates</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="meta" className="mt-3 space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Search meta templates..." className="pl-9" />
+              </div>
+              <ScrollArea className="h-[350px]">
+                <div className="space-y-2">
+                  {metaTemplates.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground text-sm">No Meta templates found</div>
+                  ) : metaTemplates.map(t => (
+                    <button key={t.id} onClick={() => setSelectedTemplateId(t.id)}
+                      className={cn("w-full text-left p-4 rounded-lg border transition-colors", selectedTemplateId === t.id ? "border-primary bg-primary/5" : "border-border hover:bg-accent/50")}>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium">{t.name}</span>
+                        <Badge variant="default" className="bg-primary text-primary-foreground">APPROVED</Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground line-clamp-2">{(t as any).components?.find?.((c: any) => c.type === 'BODY')?.text || 'No preview'}</p>
+                    </button>
+                  ))}
+                </div>
+              </ScrollArea>
+            </TabsContent>
+
+            <TabsContent value="app" className="mt-3 space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Search app templates..." className="pl-9" />
+              </div>
+              <ScrollArea className="h-[350px]">
+                <div className="space-y-2">
+                  {appTemplates.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground text-sm">No app templates found</div>
+                  ) : appTemplates.map(t => (
+                    <button key={t.id} onClick={() => setSelectedTemplateId(t.id)}
+                      className={cn("w-full text-left p-3 rounded-lg border transition-colors", selectedTemplateId === t.id ? "border-primary bg-primary/5" : "border-border hover:bg-accent/50")}>
+                      <p className="font-medium text-sm">{t.name}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">{t.body}</p>
+                    </button>
+                  ))}
+                </div>
+              </ScrollArea>
+            </TabsContent>
+          </Tabs>
+          <Button className="w-full mt-2" onClick={handleBulkTemplateSend} disabled={sendingBulk || !selectedTemplateId || selectedContactIds.length === 0}>
+            {sendingBulk ? 'Sending...' : `Send to ${selectedContactIds.length} contact(s)`}
+          </Button>
         </DialogContent>
       </Dialog>
     </div>
