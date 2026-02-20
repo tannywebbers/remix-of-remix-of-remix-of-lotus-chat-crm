@@ -1,4 +1,4 @@
-import { formatDistanceToNow, format, isToday, isYesterday } from 'date-fns';
+import { formatDistanceToNow, format, isToday, isYesterday, differenceInCalendarDays } from 'date-fns';
 
 export function formatMessageTime(date: Date): string {
   return format(date, 'HH:mm');
@@ -10,6 +10,10 @@ export function formatChatTime(date: Date): string {
   }
   if (isYesterday(date)) {
     return 'Yesterday';
+  }
+  const days = differenceInCalendarDays(new Date(), date);
+  if (days < 7) {
+    return format(date, 'EEEE');
   }
   return format(date, 'dd/MM/yyyy');
 }

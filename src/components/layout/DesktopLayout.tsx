@@ -45,9 +45,9 @@ export function DesktopLayout() {
               key={mode}
               onClick={() => setViewMode(mode)}
               className={cn(
-                'relative flex flex-col items-center gap-0.5 w-14 py-2 rounded-xl transition-all',
+                'relative flex flex-col items-center gap-0.5 w-14 py-2 rounded-xl transition-all hover:scale-[1.03]',
                 viewMode === mode
-                  ? 'bg-primary/10 text-primary'
+                  ? 'bg-primary/20 text-black ring-2 ring-primary/40'
                   : 'text-black hover:bg-accent'
               )}
               title={label}

@@ -24,9 +24,10 @@ interface ContactListItemProps {
   onToggleSelect?: (id: string) => void;
   selectionMode?: boolean;
   labels?: LabelBadge[];
+  onEnterSelectionMode?: () => void;
 }
 
-export function ContactListItem({ contact, onClick, selected, onToggleSelect, selectionMode, labels = [] }: ContactListItemProps) {
+export function ContactListItem({ contact, onClick, selected, onToggleSelect, selectionMode, labels = [], onEnterSelectionMode }: ContactListItemProps) {
   const { setEditContactId, deleteContact } = useAppStore();
   const { toast } = useToast();
   const [showOptions, setShowOptions] = useState(false);
@@ -148,7 +149,11 @@ export function ContactListItem({ contact, onClick, selected, onToggleSelect, se
             Edit contact
           </DropdownMenuItem>
           {onToggleSelect && (
-            <DropdownMenuItem onClick={() => { onToggleSelect(contact.id); setShowOptions(false); }}>
+            <DropdownMenuItem onClick={() => {
+              onEnterSelectionMode?.();
+              onToggleSelect(contact.id);
+              setShowOptions(false);
+            }}>
               <CheckSquare className="h-4 w-4 mr-3" />
               Select
             </DropdownMenuItem>
