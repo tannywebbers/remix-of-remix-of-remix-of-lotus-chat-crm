@@ -89,6 +89,63 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     return data.messageId as string;
   };
 
+  const handleSendMetaTemplate = async (template: any, params: Record<string, string>) => {
+    if (!activeChat || !user) return;
+    setSending(true);
+    try {
+      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).single();
+      if (!settings?.api_token || !settings?.phone_number_id) {
+        toast({ title: 'WhatsApp not configured', variant: 'destructive' });
+        return;
+      }
+      const normalizedPhone = activeChat.contact.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
+      const body = template.components?.find((c: any) => c.type === 'BODY');
+      let previewText = body?.text || template.name;
+      Object.entries(params).forEach(([key, value]) => { previewText = previewText.replace(key, value || key); });
+
+      const { data, error } = await supabase.functions.invoke('whatsapp-api', {
+        body: {
+          action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
+          to: normalizedPhone, type: 'template', templateName: template.name,
+          templateParams: params, templateLanguage: template.language || 'en',
+        },
+      });
+      if (error || !data?.success) {
+        const details = getWhatsAppErrorExplanation(data?.error || error?.message || 'Failed to send template');
+        toast({ title: details.title, description: details.description, variant: 'destructive' });
+        // Save as failed
+        const { data: msgData } = await supabase.from('messages').insert({
+          user_id: user.id, contact_id: activeChat.id, content: `[Template] ${template.name}: ${previewText}`,
+          type: 'template', status: 'failed', is_outgoing: true, template_name: template.name, template_params: params,
+        }).select().single();
+        if (msgData) {
+          addMessage(activeChat.id, {
+            id: msgData.id, contactId: msgData.contact_id, content: msgData.content, type: 'template',
+            status: 'failed', isOutgoing: true, timestamp: new Date(msgData.created_at),
+          });
+        }
+        return;
+      }
+      const { data: msgData } = await supabase.from('messages').insert({
+        user_id: user.id, contact_id: activeChat.id, content: previewText,
+        type: 'template', status: 'sent', is_outgoing: true, whatsapp_message_id: data.messageId,
+        template_name: template.name, template_params: params,
+      }).select().single();
+      if (msgData) {
+        addMessage(activeChat.id, {
+          id: msgData.id, contactId: msgData.contact_id, content: msgData.content, type: 'template',
+          status: 'sent', isOutgoing: true, timestamp: new Date(msgData.created_at),
+          whatsappMessageId: data.messageId,
+        });
+      }
+      toast({ title: '📨 Business-initiated message sent', description: 'Template message delivered via Meta API.' });
+    } catch (err: any) {
+      toast({ title: 'Template send failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleSend = async () => {
     if (!inputValue.trim() || !activeChat || !user) return;
     const content = inputValue.trim();
