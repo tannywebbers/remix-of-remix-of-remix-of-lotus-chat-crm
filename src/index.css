@@ -124,5 +124,11 @@
 }
 
 @layer components {
-  /* Component styles here */
+  .ios-settings-row {
+    @apply w-full flex items-start gap-3 px-4 pt-4 pb-0 text-left hover:bg-accent/40 transition-colors;
+  }
+
+  .ios-settings-icon {
+    @apply h-10 w-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5;
+  }
 }

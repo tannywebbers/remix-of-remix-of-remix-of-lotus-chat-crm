@@ -118,6 +118,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
   }, [user, fetchLabels]);
 
   const archivedCount = chats.filter((c) => c.isArchived || c.contact.isArchived).length;
+  const unreadCount = chats.filter((c) => c.unreadCount > 0).length;
 
   const filteredChats = chats
     .filter((chat) => {
@@ -191,12 +192,14 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       const metaTemplate = metaTemplates.find((t) => t.id === selectedTemplateId);
 
       for (const contact of selectedContacts) {
+        const normalizedPhone = contact.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
+
         if (bulkSource === 'app' && appTemplate) {
           const content = resolveTemplate(appTemplate.body, contact);
           const { data } = await supabase.functions.invoke('whatsapp-api', {
             body: {
               action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
-              to: contact.phone, type: 'text', content,
+              to: normalizedPhone, type: 'text', content,
             },
           });
 
@@ -223,7 +226,7 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
           await supabase.functions.invoke('whatsapp-api', {
             body: {
               action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
-              to: contact.phone, type: 'template', templateName: metaTemplate.name, templateParams: {},
+              to: normalizedPhone, type: 'template', templateName: metaTemplate.name, templateParams: {},
             },
           });
         }
@@ -267,14 +270,14 @@ export function ChatList({ onChatSelect, onNewChat }: ChatListProps) {
       {viewMode === 'chats' && (
         <div className="px-4 pb-2 shrink-0 flex flex-wrap gap-2">
           <Button size="sm" variant={chatFilter === 'all' ? 'default' : 'secondary'} className={cn('rounded-full', chatFilter === 'all' && 'text-white')} onClick={() => setChatFilter('all')}>All</Button>
-          <Button size="sm" variant={chatFilter === 'unread' ? 'default' : 'secondary'} className={cn('rounded-full', chatFilter === 'unread' && 'text-white')} onClick={() => setChatFilter('unread')}>Unread</Button>
-          <Button size="sm" variant={chatFilter === 'archived' ? 'default' : 'secondary'} className={cn('rounded-full', chatFilter === 'archived' && 'text-white')} onClick={() => setChatFilter('archived')}><Archive className="h-3.5 w-3.5 mr-1" />Archived</Button>
-          {labels.map((label) => (
-            <Button key={label.id} size="sm" variant={selectedLabelId === label.id ? 'default' : 'secondary'} className="rounded-full" onClick={() => setSelectedLabelId((prev) => prev === label.id ? null : label.id)}>
-              <span className="h-2 w-2 rounded-full mr-1" style={{ backgroundColor: label.color }} />
-              {label.name}
-            </Button>
-          ))}
+          <Button size="sm" variant={chatFilter === 'unread' ? 'default' : 'secondary'} className={cn('rounded-full flex items-center gap-1', chatFilter === 'unread' && 'text-white')} onClick={() => setChatFilter('unread')}>
+            Unread
+            {unreadCount > 0 && <span className="text-[11px] font-semibold">{unreadCount}</span>}
+          </Button>
+          <Button size="sm" variant={chatFilter === 'archived' ? 'default' : 'secondary'} className={cn('rounded-full flex items-center gap-1', chatFilter === 'archived' && 'text-white')} onClick={() => setChatFilter('archived')}>
+            <Archive className="h-3.5 w-3.5" />Archived
+            {archivedCount > 0 && <span className="text-[11px] font-semibold">{archivedCount}</span>}
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild><Button size="sm" variant="secondary" className="rounded-full"><SortAsc className="h-3.5 w-3.5 mr-1" />Sort</Button></DropdownMenuTrigger>
             <DropdownMenuContent>
