@@ -66,7 +66,7 @@ serve(async (req) => {
       }
 
       case 'send_message': {
-        const { token, phoneNumberId, to, type, content, templateName, templateParams, mediaFileName, mediaMimeType } = params;
+        const { token, phoneNumberId, to, type, content, templateName, templateParams, templateLanguage, mediaFileName, mediaMimeType } = params;
         const normalizedTo = normalizeRecipient(String(to || ''));
         if (!normalizedTo || normalizedTo.length < 8) {
           return new Response(JSON.stringify({ success: false, error: 'Invalid recipient phone number. Include country code, e.g. 234XXXXXXXXXX.' }),
@@ -96,10 +96,22 @@ serve(async (req) => {
         let messageBody: any = { messaging_product: 'whatsapp', to: normalizedTo };
 
         if (type === 'template' && templateName) {
+          const orderedParams = templateParams
+            ? Object.entries(templateParams)
+                .sort(([a], [b]) => {
+                  const numA = parseInt(String(a).replace(/\D/g, ''), 10);
+                  const numB = parseInt(String(b).replace(/\D/g, ''), 10);
+                  if (Number.isNaN(numA) || Number.isNaN(numB)) return String(a).localeCompare(String(b));
+                  return numA - numB;
+                })
+                .map(([, v]) => ({ type: 'text', text: String(v ?? '') }))
+            : [];
+
           messageBody.type = 'template';
           messageBody.template = {
-            name: templateName, language: { code: 'en' },
-            components: templateParams ? [{ type: 'body', parameters: Object.values(templateParams).map((v: any) => ({ type: 'text', text: v })) }] : [],
+            name: templateName,
+            language: { code: templateLanguage || 'en' },
+            components: orderedParams.length > 0 ? [{ type: 'body', parameters: orderedParams }] : [],
           };
         } else if (type === 'image') {
           messageBody.type = 'image';

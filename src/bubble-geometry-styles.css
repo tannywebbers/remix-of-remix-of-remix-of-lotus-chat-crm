@@ -4,24 +4,43 @@
 
 /* Precise corner radii for iOS WhatsApp style */
 .message-bubble {
-  border-radius: 8px;
+  border-radius: 14px;
   position: relative;
 }
 
 .message-bubble-outgoing {
-  /* User sent messages - sharper top-right corner */
-  border-top-left-radius: 8px;
-  border-top-right-radius: 4px !important; /* Sharp */
-  border-bottom-left-radius: 8px;
-  border-bottom-right-radius: 8px;
+  border-top-left-radius: 14px;
+  border-top-right-radius: 14px !important;
+  border-bottom-left-radius: 14px;
+  border-bottom-right-radius: 6px;
 }
 
 .message-bubble-incoming {
-  /* Contact sent messages - sharper top-left corner */
-  border-top-left-radius: 4px !important; /* Sharp */
-  border-top-right-radius: 8px;
-  border-bottom-left-radius: 8px;
-  border-bottom-right-radius: 8px;
+  border-top-left-radius: 14px !important;
+  border-top-right-radius: 14px;
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 14px;
+}
+
+.message-bubble-outgoing::after,
+.message-bubble-incoming::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  bottom: 2px;
+}
+
+.message-bubble-outgoing::after {
+  right: -4px;
+  background: hsl(var(--bubble-outgoing));
+  clip-path: polygon(0 100%, 100% 100%, 100% 0);
+}
+
+.message-bubble-incoming::after {
+  left: -4px;
+  background: hsl(var(--bubble-incoming));
+  clip-path: polygon(0 0, 0 100%, 100% 100%);
 }
 
 /* MESSAGE SPACING HIERARCHY */

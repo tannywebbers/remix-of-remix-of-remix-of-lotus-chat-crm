@@ -119,6 +119,70 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     }
   };
 
+  const handleSendMetaTemplate = async (template: any, params: Record<string, string>) => {
+    if (!activeChat || !user) return;
+    setSending(true);
+    try {
+      const { data: settings } = await supabase.from('whatsapp_settings').select('*').eq('user_id', user.id).single();
+      if (!settings?.api_token || !settings?.phone_number_id) {
+        toast({ title: 'WhatsApp not configured', variant: 'destructive' });
+        return;
+      }
+
+      const normalizedPhone = activeChat.contact.phone.replace(/[\D]/g, '');
+      const { data, error } = await supabase.functions.invoke('whatsapp-api', {
+        body: {
+          action: 'send_message',
+          token: settings.api_token,
+          phoneNumberId: settings.phone_number_id,
+          to: normalizedPhone,
+          type: 'template',
+          templateName: template.name,
+          templateLanguage: template.language || 'en',
+          templateParams: params,
+        },
+      });
+
+      const renderedText = Object.entries(params || {}).reduce((acc, [k, v]) => acc.split(k).join(v || ''), template.name);
+
+      const { data: dbData, error: dbError } = await supabase.from('messages').insert({
+        user_id: user.id,
+        contact_id: activeChat.id,
+        content: `[Template] ${template.name}: ${renderedText}`,
+        type: 'text',
+        is_outgoing: true,
+        status: data?.success ? 'sent' : 'failed',
+        template_name: template.name,
+        template_params: params,
+        whatsapp_message_id: data?.messageId || null,
+      }).select().single();
+
+      if (error || dbError) throw (error || dbError);
+
+      addMessage(activeChat.id, {
+        id: dbData.id,
+        contactId: dbData.contact_id,
+        content: dbData.content,
+        type: 'text',
+        status: data?.success ? 'sent' : 'failed',
+        isOutgoing: true,
+        timestamp: new Date(dbData.created_at),
+        templateName: template.name,
+        templateParams: params,
+        whatsappMessageId: data?.messageId,
+      });
+
+      if (!data?.success) {
+        const details = getWhatsAppErrorExplanation(data?.error || 'Template send failed');
+        toast({ title: details.title, description: details.description, variant: 'destructive' });
+      }
+    } catch (error: any) {
+      toast({ title: 'Failed to send template', description: error.message, variant: 'destructive' });
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleDeleteMessage = async (messageId: string) => {
     if (!activeChat) return;
     const currentMessages = messages[activeChat.id] || [];
@@ -250,7 +314,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
               <div><FileUploadButton onFileSelect={(file, type) => handleFileUpload(file, type)} uploading={uploading} /></div>
               <UnifiedTemplateSelector
                 contact={contact}
-                onSelectMetaTemplate={async (_template, _params) => {}}
+                onSelectMetaTemplate={handleSendMetaTemplate}
                 onInsertAppTemplate={(text) => {
                   setInputValue((prev) => prev + text);
                   setDraft(activeChat.id, inputValue + text);
