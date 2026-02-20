@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import './bubble-geometry-styles.css';
 import { applyAdminAppearance } from '@/lib/adminAppearance';
 
 const SW_VERSION = import.meta.env.VITE_APP_VERSION || '1';

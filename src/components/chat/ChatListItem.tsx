@@ -191,10 +191,8 @@ export function ChatListItem({ chat, isActive, onClick, chatLabels = [], allLabe
                 <span className="text-sm text-muted-foreground truncate">{lastMessage?.content || 'No messages yet'}</span>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                {chatLabels.slice(0, 2).map((label) => (
-                  <span key={label.id} className="px-1.5 py-0.5 rounded-full text-white text-[10px] font-semibold" style={{ backgroundColor: label.color }}>
-                    {label.name}
-                  </span>
+                {chatLabels.slice(0, 3).map((label) => (
+                  <span key={label.id} className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: label.color }} title={label.name} />
                 ))}
                 {isFav && <Star className="h-3.5 w-3.5 text-amber-500 fill-amber-500" />}
                 {isPinned && <Pin className="h-3.5 w-3.5 text-black" />}

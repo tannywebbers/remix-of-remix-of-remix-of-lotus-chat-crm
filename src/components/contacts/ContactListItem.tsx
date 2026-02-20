@@ -126,14 +126,13 @@ export function ContactListItem({ contact, onClick, selected, onToggleSelect, se
 
           {labels.length > 0 && (
             <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-              {labels.slice(0, 2).map((label) => (
+              {labels.slice(0, 3).map((label) => (
                 <span
                   key={label.id}
-                  className="px-1.5 py-0.5 rounded-full text-white text-[10px] font-semibold leading-tight"
+                  className="h-2.5 w-2.5 rounded-full"
                   style={{ backgroundColor: label.color }}
-                >
-                  {label.name}
-                </span>
+                  title={label.name}
+                />
               ))}
             </div>
           )}
