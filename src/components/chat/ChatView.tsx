@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Info, MessageCircle, MoreVertical, Send, Star, User } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useAppStore } from '@/store/appStore';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
@@ -15,6 +14,8 @@ import { VoiceRecorderButton } from '@/components/chat/VoiceRecorderButton';
 import { ImagePastePreview } from '@/components/chat/ImagePastePreview';
 import { globalVoiceRecorder } from '@/lib/globalVoiceRecorder';
 import chatBg from '@/assets/chat-bg.png';
+import { format, isSameDay, isToday, isYesterday } from 'date-fns';
+import { getWhatsAppErrorExplanation } from '@/lib/whatsappErrors';
 
 interface ChatViewProps { onBack?: () => void; showBackButton?: boolean }
 
@@ -32,6 +33,12 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const chatMessages = activeChat ? messages[activeChat.id] || [] : [];
+
+  const formatDaySeparator = (date: Date) => {
+    if (isToday(date)) return 'Today';
+    if (isYesterday(date)) return 'Yesterday';
+    return format(date, 'EEEE, dd MMM yyyy');
+  };
 
   useEffect(() => {
     const unsub = globalVoiceRecorder.subscribe(setRecorderState);
@@ -64,15 +71,21 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
       return null;
     }
 
+    const normalizedPhone = activeChat.contact.phone.replace(/[^\d+]/g, '').replace(/^\+/, '');
+
     const { data, error } = await supabase.functions.invoke('whatsapp-api', {
       body: {
         action: 'send_message', token: settings.api_token, phoneNumberId: settings.phone_number_id,
-        to: activeChat.contact.phone, type, content: mediaUrl || content,
+        to: normalizedPhone, type, content: mediaUrl || content,
         mediaFileName: mediaMeta?.fileName, mediaMimeType: mediaMeta?.mimeType,
       },
     });
 
-    if (error || !data?.success) return null;
+    if (error || !data?.success) {
+      const details = getWhatsAppErrorExplanation(data?.error || error?.message || 'Failed to send message');
+      toast({ title: details.title, description: details.description, variant: 'destructive' });
+      return null;
+    }
     return data.messageId as string;
   };
 
@@ -106,11 +119,31 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
     }
   };
 
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!activeChat) return;
+    const currentMessages = messages[activeChat.id] || [];
+    const updatedMessages = currentMessages.filter((m) => m.id !== messageId);
+
+    setMessages(activeChat.id, updatedMessages);
+
+    const lastMessage = updatedMessages.length > 0 ? updatedMessages[updatedMessages.length - 1] : undefined;
+    useAppStore.setState((state) => ({
+      chats: state.chats.map((chat) => chat.id === activeChat.id ? { ...chat, lastMessage } : chat),
+    }));
+
+    try {
+      const { error } = await supabase.from('messages').delete().eq('id', messageId);
+      if (error) throw error;
+    } catch (error: any) {
+      setMessages(activeChat.id, currentMessages);
+      toast({ title: 'Failed to delete message', description: error.message, variant: 'destructive' });
+    }
+  };
+
   const normalizeAudioMime = (mimeType: string) => {
     const normalized = mimeType.toLowerCase();
     if (normalized.includes('mp4') || normalized.includes('m4a') || normalized.includes('aac')) return { mime: 'audio/mp4', ext: 'm4a' };
-    if (normalized.includes('ogg')) return { mime: 'audio/ogg', ext: 'ogg' };
-    if (normalized.includes('mpeg') || normalized.includes('mp3')) return { mime: 'audio/mpeg', ext: 'mp3' };
+    if (normalized.includes('ogg') || normalized.includes('mpeg') || normalized.includes('mp3') || normalized.includes('webm')) return { mime: 'audio/mp4', ext: 'm4a' };
     return { mime: 'audio/mp4', ext: 'm4a' };
   };
 
@@ -178,18 +211,30 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
             <p className="text-xs text-muted-foreground truncate">{contact.phone}</p>
           </div>
         </button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="h-5 w-5" /></Button></DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setShowContactPanel(true)}><User className="h-4 w-4 mr-2" />View contact</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => useAppStore.getState().toggleFavorite(activeChat.id)}><Star className="h-4 w-4 mr-2" />Favorite</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setMessages(activeChat.id, [])}><Info className="h-4 w-4 mr-2" />Clear local view</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <ChatOptionsMenu
+          chatId={activeChat.id}
+          contactName={contact.name}
+          isPinned={activeChat.isPinned || contact.isPinned}
+          isMuted={activeChat.isMuted || contact.isMuted}
+          isArchived={activeChat.isArchived || contact.isArchived}
+          onViewContact={() => setShowContactPanel(true)}
+        />
       </div>
 
       <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
-        {chatMessages.map((message) => <MessageBubble key={message.id} message={message} />)}
+        {chatMessages.map((message, idx) => {
+          const showDaySeparator = idx === 0 || !isSameDay(new Date(chatMessages[idx - 1].timestamp), new Date(message.timestamp));
+          return (
+            <div key={message.id}>
+              {showDaySeparator && (
+                <div className="conversation-day-separator">
+                  <span>{formatDaySeparator(new Date(message.timestamp))}</span>
+                </div>
+              )}
+              <MessageBubble message={message} onDelete={() => handleDeleteMessage(message.id)} />
+            </div>
+          );
+        })}
       </div>
 
       <ImagePastePreview
