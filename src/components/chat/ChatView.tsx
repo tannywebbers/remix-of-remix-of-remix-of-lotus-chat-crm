@@ -278,7 +278,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         />
       </div>
 
-      <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+     <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-3 message-spacing-container custom-scrollbar">
         {chatMessages.map((message, idx) => {
           const showDaySeparator = idx === 0 || !isSameDay(new Date(chatMessages[idx - 1].timestamp), new Date(message.timestamp));
           return (
