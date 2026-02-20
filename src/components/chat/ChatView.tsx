@@ -35,7 +35,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
   useEffect(() => {
     const unsub = globalVoiceRecorder.subscribe(setRecorderState);
-    return () => unsub();
+    return () => { unsub(); };
   }, []);
 
   useEffect(() => {
@@ -108,10 +108,10 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
 
   const normalizeAudioMime = (mimeType: string) => {
     const normalized = mimeType.toLowerCase();
+    if (normalized.includes('mp4') || normalized.includes('m4a') || normalized.includes('aac')) return { mime: 'audio/mp4', ext: 'm4a' };
     if (normalized.includes('ogg')) return { mime: 'audio/ogg', ext: 'ogg' };
     if (normalized.includes('mpeg') || normalized.includes('mp3')) return { mime: 'audio/mpeg', ext: 'mp3' };
-    if (normalized.includes('mp4') || normalized.includes('m4a')) return { mime: 'audio/mp4', ext: 'm4a' };
-    return { mime: 'audio/ogg', ext: 'ogg' };
+    return { mime: 'audio/mp4', ext: 'm4a' };
   };
 
   const handleFileUpload = async (file: File, type: 'image' | 'document' | 'audio') => {
@@ -170,7 +170,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
   return (
     <div className="flex-1 flex flex-col h-full min-h-0 chat-background" style={{ backgroundImage: `url(${chatBg})`, backgroundAttachment: 'fixed', backgroundSize: 'cover' }}>
       <div className="flex items-center gap-2 px-3 py-2 border-b border-panel-border bg-panel-header/95">
-        {showBackButton && <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-5 w-5 text-black" /></Button>}
+        {showBackButton && <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="h-5 w-5" /></Button>}
         <button className="flex items-center gap-2 flex-1 min-w-0" onClick={() => setShowContactPanel(true)}>
           <ContactAvatar name={contact.name} avatar={contact.avatar} isOnline={contact.isOnline} size="md" />
           <div className="min-w-0 text-left">
@@ -179,11 +179,11 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
           </div>
         </button>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="h-5 w-5 text-black" /></Button></DropdownMenuTrigger>
+          <DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreVertical className="h-5 w-5" /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => setShowContactPanel(true)}><User className="h-4 w-4 mr-2 text-black" />View contact</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => useAppStore.getState().toggleFavorite(activeChat.id)}><Star className="h-4 w-4 mr-2 text-black" />Favorite</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setMessages(activeChat.id, [])}><Info className="h-4 w-4 mr-2 text-black" />Clear local view</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setShowContactPanel(true)}><User className="h-4 w-4 mr-2" />View contact</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => useAppStore.getState().toggleFavorite(activeChat.id)}><Star className="h-4 w-4 mr-2" />Favorite</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setMessages(activeChat.id, [])}><Info className="h-4 w-4 mr-2" />Clear local view</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -202,7 +202,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
         <div className="flex items-end gap-1.5 max-w-3xl mx-auto">
           {recorderState.state === 'idle' && (
             <>
-              <div className="text-black"><FileUploadButton onFileSelect={(file, type) => handleFileUpload(file, type)} uploading={uploading} /></div>
+              <div><FileUploadButton onFileSelect={(file, type) => handleFileUpload(file, type)} uploading={uploading} /></div>
               <UnifiedTemplateSelector
                 contact={contact}
                 onSelectMetaTemplate={async (_template, _params) => {}}
@@ -225,7 +225,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
             />
           ) : (
             <>
-              <div className="flex-1 flex items-end bg-background rounded-[40px] px-3 py-1 border border-input shadow-sm">
+              <div className="flex-1 flex items-end bg-background rounded-[25px] px-3 py-1 border border-input shadow-sm">
                 <textarea
                   ref={inputRef}
                   value={inputValue}
@@ -236,7 +236,7 @@ export function ChatView({ onBack, showBackButton = false }: ChatViewProps) {
                   onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
                   placeholder="Message"
                   rows={1}
-                  className="flex-1 resize-none border-0 focus:outline-none min-h-[36px] max-h-[120px] py-[7px] text-[16px] bg-transparent leading-[1.3]"
+                  className="flex-1 resize-none border-0 focus:outline-none min-h-[32px] max-h-[100px] py-[5px] text-[15px] bg-transparent leading-[1.3]"
                   disabled={sending || uploading}
                 />
               </div>

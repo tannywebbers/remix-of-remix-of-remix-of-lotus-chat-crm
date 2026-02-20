@@ -91,19 +91,19 @@ serve(async (req) => {
             const uploadForm = new FormData();
             uploadForm.append('messaging_product', 'whatsapp');
 
-            const resolvedMime = (mediaMimeType || mediaBlob.type || 'audio/ogg').toLowerCase();
-            const normalizedMime = resolvedMime.includes('ogg')
-              ? 'audio/ogg'
-              : resolvedMime.includes('mpeg')
-                ? 'audio/mpeg'
-                : resolvedMime.includes('mp4')
-                  ? 'audio/mp4'
+            const resolvedMime = (mediaMimeType || mediaBlob.type || 'audio/mp4').toLowerCase();
+            const normalizedMime = resolvedMime.includes('mp4') || resolvedMime.includes('m4a') || resolvedMime.includes('aac')
+              ? 'audio/mp4'
+              : resolvedMime.includes('ogg')
+                ? 'audio/ogg'
+                : resolvedMime.includes('mpeg')
+                  ? 'audio/mpeg'
                   : resolvedMime.includes('amr')
                     ? 'audio/amr'
                     : resolvedMime;
 
             uploadForm.append('type', normalizedMime);
-            uploadForm.append('file', mediaBlob, mediaFileName || 'voice.ogg');
+            uploadForm.append('file', mediaBlob, mediaFileName || 'voice.m4a');
 
             const uploadRes = await fetch(`${WHATSAPP_API_URL}/${phoneNumberId}/media`, {
               method: 'POST',

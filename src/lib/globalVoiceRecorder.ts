@@ -44,10 +44,11 @@ class VoiceRecorderController {
 
   private resolveMimeType(): string {
     const preferred = [
+      'audio/mp4',
+      'audio/aac',
       'audio/ogg;codecs=opus',
       'audio/ogg',
       'audio/mpeg',
-      'audio/mp4',
     ];
 
     for (const type of preferred) {
@@ -77,8 +78,14 @@ class VoiceRecorderController {
       };
 
       this.mediaRecorder.onstop = () => {
-        const recorderMime = this.mediaRecorder?.mimeType || mimeType || 'audio/ogg';
-        const normalizedMime = recorderMime.includes('webm') ? 'audio/ogg' : recorderMime;
+        const recorderMime = this.mediaRecorder?.mimeType || mimeType || 'audio/mp4';
+        const normalizedMime = recorderMime.includes('mp4') || recorderMime.includes('aac')
+          ? 'audio/mp4'
+          : recorderMime.includes('ogg')
+            ? 'audio/ogg'
+            : recorderMime.includes('mpeg')
+              ? 'audio/mpeg'
+              : 'audio/mp4';
         const blob = new Blob(this.chunks, { type: normalizedMime });
         const url = URL.createObjectURL(blob);
 
